@@ -159,6 +159,9 @@ Without cron, an attempt past its deadline is finalised on the next request that
 - In the demo, materials are **links only**: video, presentation, document or website. Files are not stored yet; stored view-only files are the target (see [Deferred](#deferred-and-why)).
 - Fields: title, URL, type, subject, grade level, topic, author. The page filters on every field and searches by title.
 - Visible to all of the school's teachers and admins, and not yet to students.
+- Any teacher or admin adds a material. The author edits and deletes their own; admins edit and delete any.
+- Only `http://` and `https://` links are accepted, because the link is rendered as-is.
+- Grade is optional («Будь-який»). The topic and author filters offer only values that some material already has.
 
 ## Data model
 

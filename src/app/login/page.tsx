@@ -15,7 +15,7 @@ export default function StaffLogin() {
       <form action={action} className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" autoComplete="username" required autoFocus />
+          <Input id="email" name="email" type="email" autoComplete="username" required autoFocus defaultValue={state?.email} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="password">Пароль</Label>

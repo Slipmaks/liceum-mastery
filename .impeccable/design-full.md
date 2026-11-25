@@ -240,7 +240,7 @@ A near-neutral cool-blue paper and graphite palette carrying one ink accent and 
 
 Student: a single column capped at 576px (`max-w-xl`), full viewport height (`h-dvh`), 16px side gutter. Fixed header (question number, timer, sheet strip), scrolling question body (20px top), fixed footer with a three-column bar: «Назад» | «Бланк n/12» | «Далі», respecting the bottom safe-area inset. The answer-sheet panel opens inside the footer, above the bar.
 
-Teacher: a 240px sidebar rail from `lg` up, hidden below; main area 16px gutter, 32px from `lg`. Header, a row of filter buttons with counts, then the class table in a bordered, 8px-radius card that scrolls horizontally when narrow.
+Teacher: a 240px sidebar rail from `lg` up; below `lg` the same sections and «Вийти» sit in a one-line top bar; main area 16px gutter, 32px from `lg`. Header, a row of filter buttons with counts, then the class table in a bordered, 8px-radius card that scrolls horizontally when narrow.
 
 **The Two Densities Rule.** Student touch targets are at least 48px tall (option rows 56px, nav buttons 48px, reorder buttons 44px square minimum) with an 18px prompt. Teacher controls use the default dense sizes (32-36px) and 14px table text. Don't carry one density onto the other surface.
 

@@ -1,12 +1,11 @@
 // Staff shell: a 240px sidebar from lg up (DESIGN.md › Layout). The session is read inside Suspense, not at the top.
 import { Suspense } from "react";
-import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { FileText } from "lucide-react";
 import { db } from "@/db";
 import { schools } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { LogoutButton } from "@/components/logout-button";
+import { Nav } from "./nav";
 
 export default function StaffLayout({ children }: LayoutProps<"/dashboard">) {
   return (
@@ -18,22 +17,21 @@ export default function StaffLayout({ children }: LayoutProps<"/dashboard">) {
             <School />
           </Suspense>
         </div>
-        <nav aria-label="Розділи" className="flex flex-col gap-0.5 px-3">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 rounded-md bg-sidebar-accent px-3 py-2 text-sm font-medium text-sidebar-accent-foreground outline-none focus-visible:ring-3 focus-visible:ring-sidebar-ring/60"
-          >
-            <FileText className="size-4" aria-hidden />
-            Тести
-          </Link>
-        </nav>
+        <Nav />
         <div className="mt-auto border-t border-sidebar-border px-5 py-4 text-sm">
           <Suspense>
             <Me />
           </Suspense>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 lg:px-8">{children}</main>
+      <div className="min-w-0 flex-1">
+        {/* Below lg the sidebar is hidden; the same sections sit in a top bar. */}
+        <header className="flex items-center justify-between gap-2 border-b bg-sidebar px-2 py-1.5 lg:hidden">
+          <Nav className="flex-row px-0" />
+          <LogoutButton />
+        </header>
+        <main className="px-4 py-6 lg:px-8">{children}</main>
+      </div>
     </div>
   );
 }

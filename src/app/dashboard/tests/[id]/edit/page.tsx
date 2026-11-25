@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { questions, subjects, tests } from "@/db/schema";
+import { questions, tests } from "@/db/schema";
+import { schoolSubjects } from "@/lib/staff";
 import { requireStaff } from "@/lib/auth";
 import { Builder } from "./builder";
 
@@ -22,15 +23,14 @@ async function Edit({ params }: Pick<PageProps<"/dashboard/tests/[id]/edit">, "p
     ? await db.select().from(tests).where(and(eq(tests.id, id), eq(tests.schoolId, me.schoolId), eq(tests.authorId, me.id), eq(tests.status, "draft")))
     : [];
   if (!test) redirect(Number.isInteger(id) ? `/dashboard/tests/${id}` : "/dashboard");
-  const [qs, subjectList] = await db.batch([
+  const [qs, subjectList] = await Promise.all([
     db.select().from(questions).where(eq(questions.testId, id)).orderBy(asc(questions.position)),
-    db.select({ id: subjects.id, name: subjects.name }).from(subjects).where(eq(subjects.schoolId, me.schoolId)),
+    schoolSubjects(me.schoolId),
   ]);
-  const collator = new Intl.Collator("uk");
   return (
     <Builder
       testId={id}
-      subjects={subjectList.sort((x, y) => collator.compare(x.name, y.name))}
+      subjects={subjectList}
       initial={{
         title: test.title,
         topic: test.topic,

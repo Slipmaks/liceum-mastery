@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { assignmentStudents, assignments, attemptEvents, attempts, classes, questions, retakeGrants, sessions, students, subjects, tests } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { finalizeDue } from "@/lib/attempt";
-import { canOpen, getAssignment } from "@/lib/staff";
+import { canOpen, getAssignment, schoolSubjects } from "@/lib/staff";
 import { parseDraft, problems } from "@/lib/draft";
 
 const num = (fd: FormData, k: string) => Number(fd.get(k)) || 0;
@@ -137,10 +137,7 @@ export async function saveComment(fd: FormData) {
 /** «Новий тест»: an empty draft of the caller's, then straight to the builder. */
 export async function createTest() {
   const me = await requireStaff();
-  const collator = new Intl.Collator("uk");
-  const [subject] = (await db.select({ id: subjects.id, name: subjects.name }).from(subjects).where(eq(subjects.schoolId, me.schoolId))).sort((x, y) =>
-    collator.compare(x.name, y.name),
-  );
+  const [subject] = await schoolSubjects(me.schoolId);
   if (!subject) redirect("/dashboard");
   const [t] = await db
     .insert(tests)

@@ -6,7 +6,7 @@ import { classes, students, users } from "@/db/schema";
 import { createSession, destroySession, startStudentSession } from "@/lib/auth";
 import { hashSecret, verifySecret } from "@/lib/secret";
 
-export type FormState = { error: string } | undefined;
+export type FormState = { error: string; email?: string } | undefined;
 
 const MAX_PINS = 5;
 // Verified when the email is unknown, so a wrong email takes as long as a wrong password.
@@ -17,7 +17,7 @@ const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 export async function loginStaff(_: FormState, fd: FormData): Promise<FormState> {
   const [u] = await db.select({ id: users.id, hash: users.passwordHash }).from(users).where(eq(users.email, str(fd, "email").toLowerCase()));
   const ok = await verifySecret(String(fd.get("password") ?? ""), u?.hash ?? DUMMY_HASH);
-  if (!u || !ok) return { error: "Невірний email або пароль." };
+  if (!u || !ok) return { error: "Невірний email або пароль.", email: str(fd, "email") };
   await createSession({ userId: u.id });
   redirect("/dashboard");
 }

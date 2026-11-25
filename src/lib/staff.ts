@@ -2,7 +2,7 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  answers, assignmentStudents, assignments, attemptEvents, attempts, classes, questions, retakeGrants, students, subjects, tests,
+  answers, assignmentStudents, assignments, attemptEvents, attempts, classes, materials, questions, retakeGrants, students, subjects, tests,
   type AttemptEventType,
 } from "@/db/schema";
 import type { Staff } from "@/lib/auth";
@@ -11,6 +11,9 @@ import { grade12 } from "@/lib/questions";
 
 /** Director and deputy have the same rights over tests and results. */
 export const isAdmin = (me: Staff) => me.rank !== "teacher";
+
+/** Materials the caller may change: their own, or all of the school's for admins. */
+export const editableMaterials = (me: Staff) => and(eq(materials.schoolId, me.schoolId), isAdmin(me) ? undefined : eq(materials.authorId, me.id));
 
 /** May open the test to a class: admins and the author. */
 export const canOpen = (me: Staff, test: { authorId: number }) => isAdmin(me) || test.authorId === me.id;
@@ -157,3 +160,10 @@ export async function buildReport(a: Assignment) {
 
 /** Points with at most 2 decimals, Ukrainian decimal comma: 0,67. */
 export const pts = (n: number) => new Intl.NumberFormat("uk", { maximumFractionDigits: 2 }).format(n);
+
+/** The school's subjects in Ukrainian alphabetical order (the database collation puts «І» before «А»). */
+export async function schoolSubjects(schoolId: number) {
+  const list = await db.select({ id: subjects.id, name: subjects.name }).from(subjects).where(eq(subjects.schoolId, schoolId));
+  const collator = new Intl.Collator("uk");
+  return list.sort((a, b) => collator.compare(a.name, b.name));
+}
