@@ -9,7 +9,7 @@ Status: **demo**. It runs on free tiers only. One school is a playground and the
 - **Next.js** (App Router, TypeScript) as a single deploy. Server code lives in route handlers and server actions. Correct answers, the timer and scoring stay on the server.
 - **Postgres on Neon** (Free plan, Frankfurt), accessed through **Drizzle**. The Free plan gives 1 GB per project and 100 CU-hours a month, and the database scales to zero after 5 minutes idle. Expected volume is about 100 MB a year for a 1000-student school, so storage is not the constraint.
 - **Vercel Hobby**, with functions in `fra1` next to the database. Hobby allows **non-commercial use only**. Once schools rely on the platform or pay for it, move to Vercel Pro or a VPS. Use plain Next.js and no Vercel-specific APIs, so that move stays possible.
-- **Auth is our own code**: a session token in an httpOnly cookie, with only its SHA-256 stored in the database. Passwords and PINs are hashed. No auth library is needed for email + password and PIN.
+- **Auth is our own code**: a session token in an httpOnly cookie, with only its SHA-256 stored in the database. Passwords and PINs are hashed with scrypt (`node:crypto`). No auth library is needed for email + password and PIN; Neon Auth / Better Auth were rejected because the student PIN flow and the one-session anti-cheat rule need full control over sessions. A staff session lasts 30 days, a student session 8 hours. Expired sessions are swept on login (no cron).
 - **No cron.** Vercel Hobby cron runs only daily, so overdue attempts are finalised lazily, on the next request that touches them (see [Attempt lifecycle](#attempt-lifecycle)).
 - **No WebSockets.** The teacher monitor polls every 5 s.
 - **UI is shadcn/ui** on Tailwind 4, with Radix primitives, the `vega` preset, Lucide icons and Inter (latin + cyrillic). Components are copied into `src/components/ui` one at a time, when a screen needs them (`pnpm dlx shadcn@latest add <name>`). Astryx (Meta) was rejected while it is in beta.
@@ -55,7 +55,7 @@ Directors and deputies enter a teacher's email and get an **invite link valid fo
 ### Student accounts
 
 - The class roster is created **in advance** by the homeroom teacher or an admin. Students do not sign themselves up, because anyone with the class code could otherwise take someone's single attempt.
-- On first login a student enters the class code, picks their name from the roster and sets a PIN. On later logins they pick their name and enter the PIN.
+- On first login a student enters the class code, picks their name from the roster and sets a PIN of 4 digits. On later logins they pick their name and enter the PIN.
 - After 5 wrong PINs the student is locked out for 15 minutes. If a PIN is lost, the homeroom teacher resets it.
 - A student who leaves is **archived, never deleted**, so their attempts stay. A student who changes class is moved, and each attempt keeps a snapshot of the `class_id` it started in.
 
@@ -182,7 +182,7 @@ A student may start an attempt while `attempts for (assignment, student)` < 1 + 
 
 ## Demo data
 
-- **Ліцей 1** (playground): a director, a deputy, 2 teachers (one is the homeroom teacher of 9-А), 2 classes of 8–10 students, and 3 tests covering all 4 question types. One test already has results, to show the report. The home page has quick-login buttons for each role.
+- **Ліцей 1** (playground): a director, a deputy, 2 teachers (one is the homeroom teacher of 9-А), 2 classes of 8–10 students, and 3 tests covering all 4 question types. One test already has results, to show the report. The home page has quick-login buttons for each role. They log in only as the seeded Ліцей 1 accounts, so without the seed they do nothing. Every seeded user has the password `demo1234`, every seeded student the PIN `1234`.
 - **Ліцей 2**: a director and one teacher, with normal login. It exists to show that schools cannot see each other.
 
 ## Deferred, and why
