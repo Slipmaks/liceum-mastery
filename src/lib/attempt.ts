@@ -1,30 +1,57 @@
 // Attempt lifecycle on the server: PRODUCT.md › Assignments, Attempt lifecycle, Anti-cheat.
-import { and, eq, exists, isNotNull, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { answers, assignmentStudents, assignments, attemptEvents, attempts, tests, type AttemptEventType } from "@/db/schema";
+import { answers, assignmentStudents, assignments, attemptEvents, attempts, retakeGrants, tests, type AttemptEventType } from "@/db/schema";
 import type { Student } from "@/lib/auth";
 
 const LOCKING = new Set<AttemptEventType>(["hidden", "pagehide", "reopen", "fullscreen_exit", "second_device"]);
 /** Events the browser may report. `reopen` and `second_device` are detected by the server. */
 export const CLIENT_EVENTS = new Set<string>(["hidden", "pagehide", "fullscreen_exit", "blur", "copy", "cut", "paste", "contextmenu"]);
 
+export const EVENT_LABEL: Record<AttemptEventType, string> = {
+  hidden: "Згорнув вкладку",
+  pagehide: "Закрив сторінку",
+  reopen: "Повторне відкриття",
+  fullscreen_exit: "Вийшов з повноекранного режиму",
+  second_device: "Вхід з іншого пристрою",
+  blur: "Втрата фокусу",
+  copy: "Спроба копіювання",
+  cut: "Спроба вирізання",
+  paste: "Спроба вставки",
+  contextmenu: "Контекстне меню",
+  unlock: "Розблоковано вчителем",
+};
+
 export type AttemptState = { status: "in_progress" | "locked" | "finished"; remainingMs: number };
 
-/** Open assignments of the student's school that this student may see: the whole class, or listed by name. */
-export const visibleTo = (me: Student) =>
-  and(
-    isNull(assignments.closedAt),
+/**
+ * Assignments of the student's school that this student may see: open ones for the whole class or listing them by name,
+ * and closed ones where they hold an unused retake grant or still have an unfinished attempt.
+ */
+export const visibleTo = (me: Student) => {
+  const mine = sql`${attempts.assignmentId} = ${assignments.id} and ${attempts.studentId} = ${me.id}`;
+  return and(
     exists(db.select({ x: sql`1` }).from(tests).where(and(eq(tests.id, assignments.testId), eq(tests.schoolId, me.schoolId)))),
     or(
-      and(eq(assignments.wholeClass, true), eq(assignments.classId, me.classId)),
-      exists(
-        db
-          .select({ x: sql`1` })
-          .from(assignmentStudents)
-          .where(and(eq(assignmentStudents.assignmentId, assignments.id), eq(assignmentStudents.studentId, me.id))),
+      and(
+        isNull(assignments.closedAt),
+        or(
+          and(eq(assignments.wholeClass, true), eq(assignments.classId, me.classId)),
+          exists(
+            db
+              .select({ x: sql`1` })
+              .from(assignmentStudents)
+              .where(and(eq(assignmentStudents.assignmentId, assignments.id), eq(assignmentStudents.studentId, me.id))),
+          ),
+        ),
       ),
+      sql`(select count(*) from ${retakeGrants} where ${retakeGrants.assignmentId} = ${assignments.id} and ${retakeGrants.studentId} = ${me.id})
+        >= (select count(*) from ${attempts} where ${mine})
+        and exists (select 1 from ${attempts} where ${mine})`,
+      sql`exists (select 1 from ${attempts} where ${mine} and ${attempts.status} <> 'finished')`,
     ),
   );
+};
 
 const scoreSql = sql`(select coalesce(sum(${answers.points}), 0) from ${answers} where ${answers.attemptId} = ${attempts.id})`;
 
@@ -35,13 +62,18 @@ const scoreSql = sql`(select coalesce(sum(${answers.points}), 0) from ${answers}
 export async function finalizeDue(filter: SQL | undefined) {
   await db
     .update(attempts)
-    .set({ status: "finished", finishedAt: sql`least(${attempts.deadlineAt}, coalesce(${assignments.closedAt}, 'infinity'))`, score: scoreSql })
+    // Closing ends the attempts that started before it; a retake started after the close runs to its own deadline.
+    .set({
+      status: "finished",
+      finishedAt: sql`least(${attempts.deadlineAt}, case when ${attempts.startedAt} < ${assignments.closedAt} then ${assignments.closedAt} end)`,
+      score: scoreSql,
+    })
     .from(assignments)
     .where(
       and(
         eq(assignments.id, attempts.assignmentId),
         ne(attempts.status, "finished"),
-        or(lte(attempts.deadlineAt, sql`now()`), isNotNull(assignments.closedAt)),
+        or(lte(attempts.deadlineAt, sql`now()`), sql`${attempts.startedAt} < ${assignments.closedAt}`),
         filter,
       ),
     );

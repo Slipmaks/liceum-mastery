@@ -75,3 +75,25 @@ export function scoreAnswer(q: Pick<Question, "type" | "points" | "data">, r: An
 
 /** 12-point grade: max(1, round(12 × score / max)). */
 export const grade12 = (score: number, max: number) => (max > 0 ? Math.max(1, Math.round((12 * score) / max)) : 1);
+
+/** The correct answer in response form. */
+export const correctResponse = (d: QuestionData): AnswerResponse => ("options" in d ? d.correct : "pairs" in d ? d.pairs : d.items.map(i => i.id));
+
+/** A response as readable lines for teachers: picked options, «1. left → right» pairs, or the arranged order. */
+export function answerLines(d: QuestionData, r: AnswerResponse): string[] {
+  if ("pairs" in d) {
+    const right = new Map(d.right.map(x => [x.id, x.text]));
+    const pairs = Array.isArray(r) ? {} : r;
+    return d.left.map((l, i) => `${i + 1}. ${l.text} → ${right.get(pairs[l.id]) ?? "—"}`);
+  }
+  const text = new Map(shuffled(d).map(x => [x.id, x.text]));
+  const ids = Array.isArray(r) ? r : [];
+  return "options" in d ? ids.map(id => text.get(id) ?? "?") : ids.map((id, i) => `${i + 1}. ${text.get(id) ?? "?"}`);
+}
+
+export const TYPE_LABEL: Record<Type, string> = {
+  one: "Одна правильна відповідь",
+  many: "Кілька правильних відповідей",
+  match: "Відповідність",
+  order: "Послідовність",
+};

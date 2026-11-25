@@ -121,7 +121,7 @@ Every client event is recorded in `attempt_events` with its time. Pagehide is se
 | copy / cut / paste / context menu attempt | — | ✓ |
 
 - **Locked** means the student sees «Зверніться до вчителя» and the server refuses their answers. The timer keeps running. A teacher who may monitor the attempt presses «Дозволити продовжити», and the unlock is logged as an event too. The locked screen polls every 5 s and returns to the test by itself.
-- **Switching devices** (a phone died mid-test): the login on the new device is refused and locks the attempt. The unlock also ends the student's other sessions, so they can log in on the new device, and the first open there is not a reopen. One unlock is enough.
+- **Switching devices** (a phone died mid-test): the login on the new device is refused and locks the attempt. When the lock came from that second-device login, the unlock also ends the student's sessions, so they can log in on the new device, and the first open there is not a reopen. One unlock is enough. Other unlocks keep the session, so a student who swiped a notification does not have to log in again.
 - **Flagged** («можливе списування») is set automatically on any event and cannot be removed. A teacher can add a comment to it, but the grade stays the teacher's call and the system never zeroes it.
 - Expect flags on honest phone users, for example from a notification shade or an incoming call. The flag is information, not a verdict.
 
@@ -140,11 +140,15 @@ Without cron, an attempt past its deadline is finalised on the next request that
 
 - A retake is granted by the test's author, the homeroom teacher of the student's class, or an admin. A comment is required («хворів», «заблоковано помилково»).
 - A grant allows exactly one more attempt. **The last attempt counts**, and earlier attempts stay in history with their events.
+- A retake may be granted after the assignment is closed («хворів»). The closed assignment then shows up again for that student only, until the grant is used, and closing does not end an attempt that started after the close; it runs to its own deadline.
+- A grant is given on the student's attempt page, only on their last finished attempt and only if no earlier grant is still unused.
 
 ## Teacher views
 
-- **Monitor** for an open assignment. It polls every 5 s and shows, per student: status (не почав / пише / заблоковано / здав), answered N of M, event count, the flag, and an unlock button.
-- **Report**: a table of students × questions with points, total, 12-point grade, flag, retake marker, and a bottom row with the % correct for each question. It exports to CSV in UTF-8 with a BOM so Excel shows Cyrillic correctly.
+- **Who sees what.** Admins see every assignment of the school; a teacher sees the assignments of their own tests; a homeroom teacher sees every assignment opened to their class. Only admins and the test's author open and close a test.
+- **Monitor** for an open assignment. It polls every 5 s and shows, per student: status (не почав / пише / заблоковано / здав), answered N of M, event count, the flag, and an unlock button. Closing the test asks for confirmation, because it ends every running attempt.
+- **Report**: a table of students × questions with points, total, 12-point grade, flag, retake marker, and a bottom row with the % correct for each question (the share of finished students with full points on it). It exports to CSV in UTF-8 with a BOM so Excel shows Cyrillic correctly, with `;` as the separator and decimal commas, as Excel expects in the Ukrainian locale.
+- **Attempt page**: the event log, each answer next to the key, the teacher's comment on the flag, the student's attempts and retake grants.
 
 ## Materials bank
 
