@@ -196,13 +196,18 @@ export const answers = pgTable(
 	t => [primaryKey({ columns: [t.attemptId, t.questionId] })]
 );
 
-/** Event types and which of them lock an attempt: PRODUCT.md › Anti-cheat. */
+/** Which events lock or flag an attempt: PRODUCT.md › Anti-cheat. `unlock` is the teacher's «Дозволити продовжити». */
+export type AttemptEventType =
+	| 'hidden' | 'pagehide' | 'reopen' | 'fullscreen_exit' | 'second_device' // lock + flag
+	| 'blur' | 'copy' | 'cut' | 'paste' | 'contextmenu' // flag
+	| 'unlock';
+
 export const attemptEvents = pgTable(
 	'attempt_events',
 	{
 		id: id(),
 		attemptId: integer().notNull().references(() => attempts.id),
-		type: text().notNull(),
+		type: text().notNull().$type<AttemptEventType>(),
 		at: createdAt(),
 		meta: jsonb()
 	},

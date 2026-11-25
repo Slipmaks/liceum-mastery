@@ -145,7 +145,7 @@ Without cron, an attempt past its deadline is finalised on the next request that
 
 ## Materials bank
 
-- Materials are **links only**: video, presentation, document or website. Files are never stored.
+- In the demo, materials are **links only**: video, presentation, document or website. Files are not stored yet; stored view-only files are the target (see [Deferred](#deferred-and-why)).
 - Fields: title, URL, type, subject, grade level, topic, author. The page filters on every field and searches by title.
 - Visible to all of the school's teachers and admins, and not yet to students.
 
@@ -197,5 +197,6 @@ A student may start an attempt while `attempts for (assignment, student)` < 1 + 
 | KaTeX formulas | When a math or physics teacher needs them. |
 | 12-point threshold tables per test | Linear grading is enough for the demo. |
 | Materials for students | Needs a decision on which materials each class sees. |
+| Materials as stored files, view only | The target form of the materials bank: files are uploaded and stored, and users can only view them in the browser, never download them. Needs object storage (candidate: Cloudflare R2, free tier, no egress fees). The browser never gets a direct file URL: files are served through the app, which checks the session and `school_id`, with no download button and `Content-Disposition: inline`. View-only is a deterrent, not a guarantee: a screenshot or a dev-tools save is always possible. Choosing to render documents as page images (no downloadable original) is part of that iteration's design. |
 | Subdomains | Only a cosmetic sign later. The data model does not change. |
 | Scheduled auto-open of tests | Teachers open tests by hand in the lesson. |

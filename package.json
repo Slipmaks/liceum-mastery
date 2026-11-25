@@ -2,6 +2,7 @@
   "name": "liceum-mastery",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +10,9 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node --env-file=.env src/db/seed.ts",
+    "check": "node src/lib/check.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
