@@ -1,12 +1,13 @@
 "use server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { assignmentStudents, assignments, attemptEvents, attempts, classes, retakeGrants, sessions, students, tests } from "@/db/schema";
+import { assignmentStudents, assignments, attemptEvents, attempts, classes, questions, retakeGrants, sessions, students, subjects, tests } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { finalizeDue } from "@/lib/attempt";
 import { canOpen, getAssignment } from "@/lib/staff";
+import { parseDraft, problems } from "@/lib/draft";
 
 const num = (fd: FormData, k: string) => Number(fd.get(k)) || 0;
 const ids = (fd: FormData, k: string) => fd.getAll(k).map(Number).filter(Number.isInteger);
@@ -15,10 +16,12 @@ const ids = (fd: FormData, k: string) => fd.getAll(k).map(Number).filter(Number.
 export async function openTest(fd: FormData) {
   const me = await requireStaff();
   const [[test], [cls]] = await db.batch([
-    db.select({ id: tests.id, authorId: tests.authorId }).from(tests).where(and(eq(tests.id, num(fd, "test")), eq(tests.schoolId, me.schoolId))),
+    db.select({ id: tests.id, authorId: tests.authorId, title: tests.title }).from(tests).where(and(eq(tests.id, num(fd, "test")), eq(tests.schoolId, me.schoolId))),
     db.select({ id: classes.id }).from(classes).where(and(eq(classes.id, num(fd, "class")), eq(classes.schoolId, me.schoolId))),
   ]);
   if (!test || !cls || !canOpen(me, test)) redirect("/dashboard");
+  const qs = await db.select({ type: questions.type, prompt: questions.prompt, points: questions.points, data: questions.data }).from(questions).where(eq(questions.testId, test.id));
+  if (problems({ title: test.title, questions: qs }).length) redirect(`/dashboard/tests/${test.id}`);
   const wholeClass = fd.get("whole") === "on";
   const picked = wholeClass
     ? []
@@ -127,4 +130,67 @@ export async function saveComment(fd: FormData) {
   const comment = String(fd.get("comment") ?? "").trim();
   await db.update(attempts).set({ teacherComment: comment || null }).where(eq(attempts.id, attemptId));
   revalidatePath(`/dashboard/attempts/${attemptId}`);
+}
+
+// ---- test builder ----
+
+/** «Новий тест»: an empty draft of the caller's, then straight to the builder. */
+export async function createTest() {
+  const me = await requireStaff();
+  const collator = new Intl.Collator("uk");
+  const [subject] = (await db.select({ id: subjects.id, name: subjects.name }).from(subjects).where(eq(subjects.schoolId, me.schoolId))).sort((x, y) =>
+    collator.compare(x.name, y.name),
+  );
+  if (!subject) redirect("/dashboard");
+  const [t] = await db
+    .insert(tests)
+    .values({ schoolId: me.schoolId, authorId: me.id, subjectId: subject.id, grade: 9, title: "", timeLimitMin: 20 })
+    .returning({ id: tests.id });
+  redirect(`/dashboard/tests/${t.id}/edit`);
+}
+
+/** «Зробити копію»: any school test becomes the caller's draft, questions included. It is how a locked test is changed. */
+export async function copyTest(fd: FormData) {
+  const me = await requireStaff();
+  const [src] = await db.select().from(tests).where(and(eq(tests.id, num(fd, "test")), eq(tests.schoolId, me.schoolId)));
+  if (!src) redirect("/dashboard");
+  const qs = await db.select().from(questions).where(eq(questions.testId, src.id)).orderBy(asc(questions.position));
+  const [t] = await db
+    .insert(tests)
+    .values({ schoolId: me.schoolId, authorId: me.id, subjectId: src.subjectId, grade: src.grade, topic: src.topic, title: `${src.title} (копія)`, timeLimitMin: src.timeLimitMin })
+    .returning({ id: tests.id });
+  if (qs.length) await db.insert(questions).values(qs.map(q => ({ testId: t.id, position: q.position, type: q.type, prompt: q.prompt, points: q.points, data: q.data })));
+  redirect(`/dashboard/tests/${t.id}/edit`);
+}
+
+/** Builder autosave. Only the author's own draft; the questions are replaced as a whole in one transaction. */
+export async function saveDraft(testId: number, input: unknown): Promise<{ ok: boolean }> {
+  const me = await requireStaff();
+  const draft = parseDraft(input);
+  if (!draft || !Number.isInteger(testId)) return { ok: false };
+  const [[test], [subject]] = await db.batch([
+    db
+      .select({ id: tests.id })
+      .from(tests)
+      .where(and(eq(tests.id, testId), eq(tests.schoolId, me.schoolId), eq(tests.authorId, me.id), eq(tests.status, "draft"))),
+    db.select({ id: subjects.id }).from(subjects).where(and(eq(subjects.id, draft.subjectId), eq(subjects.schoolId, me.schoolId))),
+  ]);
+  if (!test || !subject) return { ok: false };
+  // ponytail: a save racing the first «Відкрити» could still swap questions before any answer exists; answers' FK stops it after.
+  await db.batch([
+    db
+      .update(tests)
+      .set({ title: draft.title, topic: draft.topic, subjectId: draft.subjectId, grade: draft.grade, timeLimitMin: draft.timeLimitMin })
+      .where(eq(tests.id, testId)),
+    db.delete(questions).where(eq(questions.testId, testId)),
+    ...(draft.questions.length ? [db.insert(questions).values(draft.questions.map((q, position) => ({ testId, position, ...q })))] : []),
+  ]);
+  return { ok: true };
+}
+
+/** Deletes the caller's draft. A test that was ever opened is locked and stays. */
+export async function deleteDraft(fd: FormData) {
+  const me = await requireStaff();
+  await db.delete(tests).where(and(eq(tests.id, num(fd, "test")), eq(tests.schoolId, me.schoolId), eq(tests.authorId, me.id), eq(tests.status, "draft")));
+  redirect("/dashboard");
 }

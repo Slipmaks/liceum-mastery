@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SheetStrip } from "@/components/sheet-strip";
+import { ConfirmForm } from "@/components/confirm-form";
 import { cn } from "@/lib/utils";
 import { closeAssignment, unlockAttempt } from "../../actions";
 
@@ -72,17 +73,12 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
         <div className="flex items-center gap-3">
           <p className="text-right text-sm text-muted-foreground tabular-nums">оновлено о {props.updated}</p>
           {props.canClose && (
-            <form
-              action={closeAssignment}
-              onSubmit={e => {
-                if (!confirm("Закрити тест? Усі незавершені роботи буде здано в поточному стані.")) e.preventDefault();
-              }}
-            >
+            <ConfirmForm action={closeAssignment} message="Закрити тест? Усі незавершені роботи буде здано в поточному стані.">
               <input type="hidden" name="assignment" value={assignmentId} />
               <Button type="submit" variant="outline">
                 Закрити тест
               </Button>
-            </form>
+            </ConfirmForm>
           )}
         </div>
       </header>

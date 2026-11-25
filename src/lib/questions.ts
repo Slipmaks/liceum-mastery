@@ -90,10 +90,3 @@ export function answerLines(d: QuestionData, r: AnswerResponse): string[] {
   const ids = Array.isArray(r) ? r : [];
   return "options" in d ? ids.map(id => text.get(id) ?? "?") : ids.map((id, i) => `${i + 1}. ${text.get(id) ?? "?"}`);
 }
-
-export const TYPE_LABEL: Record<Type, string> = {
-  one: "Одна правильна відповідь",
-  many: "Кілька правильних відповідей",
-  match: "Відповідність",
-  order: "Послідовність",
-};

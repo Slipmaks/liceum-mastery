@@ -8,11 +8,14 @@ import { db } from "@/db";
 import { assignments, classes, questions, students, subjects, tests, users } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { canOpen, watchable } from "@/lib/staff";
-import { answerLines, correctResponse, TYPE_LABEL } from "@/lib/questions";
+import { answerLines, correctResponse } from "@/lib/questions";
+import { problems, TYPE_LABEL } from "@/lib/draft";
 import { dayTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/form-error";
-import { openTest } from "../../actions";
+import { Copy, Eye, Pencil, Trash2 } from "lucide-react";
+import { copyTest, deleteDraft, openTest } from "../../actions";
+import { ConfirmForm } from "@/components/confirm-form";
 
 const collator = new Intl.Collator("uk");
 
@@ -51,6 +54,8 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
   ]);
   classList.sort((a, b) => collator.compare(a.name, b.name));
   const total = qs.reduce((s, q) => s + q.points, 0);
+  const todo = problems({ title: test.title, questions: qs });
+  const editable = test.status === "draft" && test.authorId === me.id;
 
   return (
     <div className="grid max-w-3xl gap-8">
@@ -61,18 +66,58 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
           </Link>{" "}
           / {test.subject}
         </p>
-        <h1 className="mt-1 text-2xl font-semibold">{test.title}</h1>
+        <h1 className="mt-1 text-2xl font-semibold">{test.title || "Без назви"}</h1>
         <p className="mt-1 text-sm text-muted-foreground tabular-nums">
           {test.grade} клас · {qs.length} питань · {total} балів · {test.minutes} хв · {test.author}
         </p>
         {test.status === "locked" && (
           <p className="mt-2 text-sm text-muted-foreground">Тест уже відкривали для класу, тому його не можна змінити. Щоб змінити, зробіть копію.</p>
         )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {editable && (
+            <Button asChild>
+              <Link href={`/dashboard/tests/${id}/edit`}>
+                <Pencil aria-hidden /> Редагувати
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant="outline">
+            <a href={`/preview/${id}`} target="_blank" rel="noreferrer">
+              <Eye aria-hidden /> Переглянути як учень
+            </a>
+          </Button>
+          <form action={copyTest}>
+            <input type="hidden" name="test" value={id} />
+            <Button type="submit" variant="outline">
+              <Copy aria-hidden /> Зробити копію
+            </Button>
+          </form>
+          {editable && (
+            <ConfirmForm action={deleteDraft} message="Видалити цю чернетку разом з питаннями?">
+              <input type="hidden" name="test" value={id} />
+              <Button type="submit" variant="ghost">
+                <Trash2 aria-hidden /> Видалити
+              </Button>
+            </ConfirmForm>
+          )}
+        </div>
       </header>
 
-      {canOpen(me, test) && (
+      {canOpen(me, test) && todo.length > 0 && (
+        <section className="grid gap-1 rounded-lg bg-muted p-4 text-sm">
+          <p className="font-medium">Тест ще не можна відкрити для класу:</p>
+          <ul className="list-disc pl-5">
+            {todo.map(p => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {canOpen(me, test) && todo.length === 0 && (
         <section className="grid gap-3 rounded-lg border bg-card p-4">
           <h2 className="font-semibold">Відкрити для класу</h2>
+          {test.status === "draft" && <p className="text-sm text-muted-foreground">Після першого відкриття тест не можна буде змінити.</p>}
           <Form action={`/dashboard/tests/${id}`} className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1.5 text-sm">
               Клас

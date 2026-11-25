@@ -76,6 +76,10 @@ Directors and deputies enter a teacher's email and get an **invite link valid fo
 - All teachers of a school can read every school test and copy it to themselves.
 - **Subjects** are per school. A new school is seeded with standard subjects, and admins can add more.
 - Builder: one page with the test metadata and a list of questions; a teacher adds a question by choosing its type. Drafts autosave. "Переглянути як учень" (preview as a student) is available.
+  - Only the author edits their own draft. Anyone on the staff can copy any school test; the copy is a draft of theirs titled «… (копія)». The author can delete a draft; a locked test is never deleted.
+  - A new question starts in NMT shape: 4 options (`one`), 5 options (`many`), 4 rows × 5 letters (`match`), 4 items (`order`). Up to 8 items per list.
+  - A draft saves while half-written. Before the first «Відкрити для класу» it must be ready: a title, at least one question, and in each question a prompt, points above 0, no empty item, and a complete key (one correct option for `one`, at least one for `many`, a distinct letter for every `match` row with at least as many letters as rows). The builder and the test page list what is missing, and the server refuses to open a test that is not ready.
+  - The preview shuffles like a real attempt and saves nothing: no attempt, no events, no submit.
 - **No images.** LaTeX via KaTeX is deferred until a subject needs it.
 
 ## Assignments

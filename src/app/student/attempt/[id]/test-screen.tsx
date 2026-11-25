@@ -32,9 +32,11 @@ type Props = {
   questions: StudentQuestion[];
   initialAnswers: Record<number, AnswerResponse>;
   initial: AttemptState;
+  /** «Переглянути як учень» for staff: nothing is sent to the server, no anti-cheat, no fullscreen, no submit. */
+  preview?: boolean;
 };
 
-export function TestScreen({ attemptId, subject, title, questions, initialAnswers, initial }: Props) {
+export function TestScreen({ attemptId, subject, title, questions, initialAnswers, initial, preview = false }: Props) {
   const router = useRouter();
   const [q, setQ] = useState(0);
   const [answers, setAnswers] = useState(initialAnswers);
@@ -42,8 +44,8 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
   const [locked, setLocked] = useState(initial.status === "locked");
   const [unsaved, setUnsaved] = useState(false);
   const [fullscreenFailed, setFullscreenFailed] = useState(false);
-  const wantsFullscreen = useSyncExternalStore(onFullscreenChange, needsFullscreen, () => false) && !fullscreenFailed;
-  const left = useCountdown(initial.remainingMs, () => router.refresh());
+  const wantsFullscreen = useSyncExternalStore(onFullscreenChange, needsFullscreen, () => false) && !fullscreenFailed && !preview;
+  const left = useCountdown(initial.remainingMs, () => !preview && router.refresh());
   const pending = useRef(new Map<number, AnswerResponse | null>());
 
   const apply = useCallback(
@@ -57,13 +59,14 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
   // First open is free; opening again (reload, another tab) locks. A ref, so React's dev double-effect calls it once.
   const opened = useRef(false);
   useEffect(() => {
-    if (opened.current) return;
+    if (preview || opened.current) return;
     opened.current = true;
     openAttempt(attemptId).then(apply);
-  }, [attemptId, apply]);
+  }, [attemptId, apply, preview]);
 
   // Anti-cheat: every event goes to the server; the ones that lock also lock the screen at once.
   useEffect(() => {
+    if (preview) return;
     const send = (type: string) => navigator.sendBeacon(`/student/attempt/${attemptId}/event`, type);
     const lock = (type: string) => {
       send(type);
@@ -94,7 +97,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
       window.removeEventListener("blur", onBlur);
       blocked.forEach(t => document.removeEventListener(t, block));
     };
-  }, [attemptId]);
+  }, [attemptId, preview]);
 
   // While locked, wait for the teacher's «Дозволити продовжити» (the monitor polls every 5 s too).
   useEffect(() => {
@@ -105,6 +108,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
 
   // Every answer goes to the server at once; failed saves are retried until they land.
   const flush = useCallback(async () => {
+    if (preview) return pending.current.clear();
     for (const [qid, r] of pending.current) {
       try {
         const s = await saveAnswer(attemptId, qid, r);
@@ -116,7 +120,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
       }
     }
     setUnsaved(false);
-  }, [attemptId, apply]);
+  }, [attemptId, apply, preview]);
   useEffect(() => {
     if (!unsaved) return;
     const id = setInterval(flush, 5000);
@@ -189,6 +193,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
           <Timer seconds={left} />
         </div>
         <SheetStrip answered={answered} current={q} numbered className="mt-3 gap-1" cellClassName="h-7 w-auto flex-1" />
+        {preview && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-sm">Попередній перегляд: так тест бачить учень. Відповіді не зберігаються.</p>}
         {unsaved && (
           <p role="alert" className="mt-2 rounded-md bg-muted px-3 py-2 text-sm">
             Немає зв’язку. Відповідь збережеться, щойно з’єднання відновиться.
@@ -240,7 +245,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
             </div>
             <form action={submitAttempt.bind(null, attemptId)} className="mt-4 flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground tabular-nums">Без відповіді: {answered.filter(a => !a).length}</p>
-              <Button type="submit" variant="outline" className="h-11 px-4" disabled={unsaved}>
+              <Button type="submit" variant="outline" className="h-11 px-4" disabled={unsaved || preview}>
                 Завершити тест
               </Button>
             </form>

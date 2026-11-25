@@ -1,0 +1,362 @@
+"use client";
+// One page: the test's details and its questions; a question is added by choosing its type. Drafts autosave.
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowDown, ArrowUp, Eye, Plus, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+import { blankQuestion, MAX_ITEMS, nextId, problems, TYPE_LABEL, type Draft, type DraftQuestion, type Item, type QType } from "@/lib/draft";
+import { saveDraft } from "../../../actions";
+
+const LETTERS = ["А", "Б", "В", "Г", "Д", "Е", "Є", "Ж"];
+const GRADES = Array.from({ length: 11 }, (_, i) => i + 1);
+const SAVE = { saved: "Збережено", dirty: "Є незбережені зміни", saving: "Зберігаю…", error: "Не вдалося зберегти. Спробую ще раз." };
+const select = "h-9 rounded-md border border-input bg-background px-2.5 text-sm";
+
+type Q = DraftQuestion & { key: number };
+let keySeq = 0;
+const withKey = (q: DraftQuestion): Q => ({ ...q, key: ++keySeq });
+const move = <T,>(xs: T[], from: number, to: number) => {
+  const next = [...xs];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+};
+
+export function Builder({ testId, subjects, initial }: { testId: number; subjects: { id: number; name: string }[]; initial: Draft }) {
+  const { questions: initialQuestions, ...initialMeta } = initial;
+  const [meta, setMeta] = useState(initialMeta);
+  const [qs, setQs] = useState(() => initialQuestions.map(withKey));
+  const [save, setSave] = useState<keyof typeof SAVE>("saved");
+  const version = useRef(0);
+
+  const draft: Draft = { ...meta, questions: qs.map(q => ({ type: q.type, prompt: q.prompt, points: q.points, data: q.data })) };
+  const todo = problems(draft);
+
+  // Autosave 800 ms after the last change; a reply for an older version doesn't mark the newer one saved.
+  const changed = () => {
+    version.current++;
+    setSave("dirty");
+  };
+  const editMeta = (patch: Partial<typeof meta>) => {
+    setMeta(m => ({ ...m, ...patch }));
+    changed();
+  };
+  const editQs = (fn: (qs: Q[]) => Q[]) => {
+    setQs(fn);
+    changed();
+  };
+  const editQ = (key: number, fn: (q: Q) => Q) => editQs(list => list.map(q => (q.key === key ? fn(q) : q)));
+
+  const latest = useRef(draft);
+  useEffect(() => {
+    latest.current = draft;
+  });
+  useEffect(() => {
+    if (save !== "dirty" && save !== "error") return;
+    const v = version.current;
+    const t = setTimeout(
+      async () => {
+        setSave("saving");
+        const ok = await saveDraft(testId, latest.current).then(r => r.ok, () => false);
+        if (version.current === v) setSave(ok ? "saved" : "error");
+      },
+      save === "error" ? 5000 : 800,
+    );
+    return () => clearTimeout(t);
+  }, [save, testId, meta, qs]);
+
+  useEffect(() => {
+    if (save === "saved") return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [save]);
+
+  return (
+    <div className="grid max-w-3xl gap-6 pb-24">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            <Link href={`/dashboard/tests/${testId}`} className="underline-offset-4 hover:underline">
+              До сторінки тесту
+            </Link>
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">{meta.title.trim() || "Новий тест"}</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <p role="status" className={cn("text-sm", save === "saved" ? "text-muted-foreground" : "text-foreground")}>
+            {SAVE[save]}
+          </p>
+          <Button asChild variant="outline">
+            <a href={`/preview/${testId}`} target="_blank" rel="noreferrer">
+              <Eye aria-hidden /> Переглянути як учень
+            </a>
+          </Button>
+        </div>
+      </header>
+
+      <section className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-2">
+        <div className="grid gap-1.5 sm:col-span-2">
+          <Label htmlFor="title">Назва</Label>
+          <Input id="title" value={meta.title} maxLength={200} placeholder="Наприклад: Квадратні рівняння, контрольна робота" onChange={e => editMeta({ title: e.target.value })} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="subject">Предмет</Label>
+          <select id="subject" className={select} value={meta.subjectId} onChange={e => editMeta({ subjectId: Number(e.target.value) })}>
+            {subjects.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="grade">Клас</Label>
+            <select id="grade" className={select} value={meta.grade} onChange={e => editMeta({ grade: Number(e.target.value) })}>
+              {GRADES.map(g => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="minutes">Час, хв</Label>
+            <Input
+              id="minutes"
+              type="number"
+              min={1}
+              max={300}
+              value={meta.timeLimitMin}
+              onChange={e => editMeta({ timeLimitMin: Math.min(300, Math.max(1, Math.round(Number(e.target.value)) || 1)) })}
+              className="tabular-nums"
+            />
+          </div>
+        </div>
+        <div className="grid gap-1.5 sm:col-span-2">
+          <Label htmlFor="topic">Тема</Label>
+          <Input id="topic" value={meta.topic} maxLength={200} onChange={e => editMeta({ topic: e.target.value })} />
+        </div>
+      </section>
+
+      <ol className="grid gap-4">
+        {qs.map((q, i) => (
+          <li key={q.key} className="grid gap-3 rounded-lg border bg-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium tabular-nums">
+                {i + 1}. {TYPE_LABEL[q.type]}
+              </p>
+              <div className="flex items-center gap-1">
+                <Label className="mr-2 text-sm font-normal text-muted-foreground">
+                  Бали
+                  <Input
+                    type="number"
+                    min={0.5}
+                    max={100}
+                    step={0.5}
+                    value={q.points}
+                    onChange={e => editQ(q.key, x => ({ ...x, points: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                    className="h-8 w-20 tabular-nums"
+                  />
+                </Label>
+                <Button variant="ghost" size="icon-sm" disabled={i === 0} aria-label={`Питання ${i + 1} вище`} onClick={() => editQs(l => move(l, i, i - 1))}>
+                  <ArrowUp aria-hidden />
+                </Button>
+                <Button variant="ghost" size="icon-sm" disabled={i === qs.length - 1} aria-label={`Питання ${i + 1} нижче`} onClick={() => editQs(l => move(l, i, i + 1))}>
+                  <ArrowDown aria-hidden />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Видалити питання ${i + 1}`}
+                  onClick={() => {
+                    if (confirm(`Видалити питання ${i + 1}?`)) editQs(l => l.filter(x => x.key !== q.key));
+                  }}
+                >
+                  <Trash2 aria-hidden />
+                </Button>
+              </div>
+            </div>
+            <textarea
+              aria-label={`Текст питання ${i + 1}`}
+              value={q.prompt}
+              rows={2}
+              maxLength={2000}
+              placeholder="Текст питання"
+              onChange={e => editQ(q.key, x => ({ ...x, prompt: e.target.value }))}
+              className="w-full rounded-md border border-input bg-transparent px-2.5 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+            />
+            <QuestionBody q={q} n={i + 1} onChange={fn => editQ(q.key, fn)} />
+          </li>
+        ))}
+      </ol>
+
+      <section className="grid gap-2">
+        <p className="text-sm font-medium">Додати питання</p>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(TYPE_LABEL) as QType[]).map(t => (
+            <Button key={t} variant="outline" onClick={() => editQs(l => [...l, withKey(blankQuestion(t))])}>
+              <Plus aria-hidden /> {TYPE_LABEL[t]}
+            </Button>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-1 rounded-lg bg-muted p-4 text-sm">
+        {todo.length === 0 ? (
+          <p>Тест готовий. Відкрити його для класу можна на сторінці тесту.</p>
+        ) : (
+          <>
+            <p className="font-medium">Що треба доробити, щоб відкрити тест для класу:</p>
+            <ul className="list-disc pl-5">
+              {todo.map(p => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function QuestionBody({ q, n, onChange }: { q: Q; n: number; onChange: (fn: (q: Q) => Q) => void }) {
+  const d = q.data;
+  const set = (data: DraftQuestion["data"]) => onChange(x => ({ ...x, data }) as Q);
+
+  if ("options" in d) {
+    const many = q.type === "many";
+    return (
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm text-muted-foreground">Варіанти: позначте {many ? "всі правильні" : "правильний"}</legend>
+        {d.options.map((o, j) => (
+          <div key={o.id} className="flex items-center gap-2">
+            <input
+              type={many ? "checkbox" : "radio"}
+              name={`correct-${q.key}`}
+              aria-label={`Варіант ${LETTERS[j]} правильний`}
+              checked={d.correct.includes(o.id)}
+              onChange={() =>
+                set({ ...d, correct: many ? (d.correct.includes(o.id) ? d.correct.filter(c => c !== o.id) : [...d.correct, o.id]) : [o.id] })
+              }
+              className="size-4 shrink-0 accent-foreground"
+            />
+            <span className="w-5 shrink-0 text-sm font-semibold">{LETTERS[j]}</span>
+            <ItemInput label={`Питання ${n}, варіант ${LETTERS[j]}`} item={o} onChange={text => set({ ...d, options: d.options.map(x => (x.id === o.id ? { ...x, text } : x)) })} />
+            <RemoveButton
+              label={`Видалити варіант ${LETTERS[j]}`}
+              disabled={d.options.length <= 2}
+              onClick={() => set({ options: d.options.filter(x => x.id !== o.id), correct: d.correct.filter(c => c !== o.id) })}
+            />
+          </div>
+        ))}
+        <AddButton disabled={d.options.length >= MAX_ITEMS} onClick={() => set({ ...d, options: [...d.options, { id: nextId(d.options, "o"), text: "" }] })}>
+          Варіант
+        </AddButton>
+      </fieldset>
+    );
+  }
+
+  if ("pairs" in d) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <fieldset className="grid content-start gap-2">
+          <legend className="mb-1 text-sm text-muted-foreground">Рядки і правильна літера</legend>
+          {d.left.map((l, j) => (
+            <div key={l.id} className="flex items-center gap-2">
+              <span className="w-5 shrink-0 text-sm font-semibold tabular-nums">{j + 1}</span>
+              <ItemInput label={`Питання ${n}, рядок ${j + 1}`} item={l} onChange={text => set({ ...d, left: d.left.map(x => (x.id === l.id ? { ...x, text } : x)) })} />
+              <select
+                aria-label={`Правильна літера для рядка ${j + 1}`}
+                value={d.pairs[l.id] ?? ""}
+                onChange={e => set({ ...d, pairs: { ...d.pairs, [l.id]: e.target.value } })}
+                className={cn(select, "w-16 shrink-0")}
+              >
+                <option value="" disabled>
+                  —
+                </option>
+                {d.right.map((r, k) => (
+                  <option key={r.id} value={r.id}>
+                    {LETTERS[k]}
+                  </option>
+                ))}
+              </select>
+              <RemoveButton
+                label={`Видалити рядок ${j + 1}`}
+                disabled={d.left.length <= 2}
+                onClick={() => set({ ...d, left: d.left.filter(x => x.id !== l.id), pairs: Object.fromEntries(Object.entries(d.pairs).filter(([k]) => k !== l.id)) })}
+              />
+            </div>
+          ))}
+          <AddButton disabled={d.left.length >= MAX_ITEMS} onClick={() => set({ ...d, left: [...d.left, { id: nextId(d.left, "l"), text: "" }] })}>
+            Рядок
+          </AddButton>
+        </fieldset>
+        <fieldset className="grid content-start gap-2">
+          <legend className="mb-1 text-sm text-muted-foreground">Варіанти (як у НМТ, на один більше)</legend>
+          {d.right.map((r, k) => (
+            <div key={r.id} className="flex items-center gap-2">
+              <span className="w-5 shrink-0 text-sm font-semibold">{LETTERS[k]}</span>
+              <ItemInput label={`Питання ${n}, варіант ${LETTERS[k]}`} item={r} onChange={text => set({ ...d, right: d.right.map(x => (x.id === r.id ? { ...x, text } : x)) })} />
+              <RemoveButton
+                label={`Видалити варіант ${LETTERS[k]}`}
+                disabled={d.right.length <= 2}
+                onClick={() =>
+                  set({ ...d, right: d.right.filter(x => x.id !== r.id), pairs: Object.fromEntries(Object.entries(d.pairs).filter(([, v]) => v !== r.id)) })
+                }
+              />
+            </div>
+          ))}
+          <AddButton disabled={d.right.length >= MAX_ITEMS} onClick={() => set({ ...d, right: [...d.right, { id: nextId(d.right, "r"), text: "" }] })}>
+            Варіант
+          </AddButton>
+        </fieldset>
+      </div>
+    );
+  }
+
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="mb-1 text-sm text-muted-foreground">Пункти у правильному порядку. Учні побачать їх перемішаними.</legend>
+      {d.items.map((it, j) => (
+        <div key={it.id} className="flex items-center gap-2">
+          <span className="w-5 shrink-0 text-sm font-semibold tabular-nums">{j + 1}</span>
+          <ItemInput label={`Питання ${n}, пункт ${j + 1}`} item={it} onChange={text => set({ items: d.items.map(x => (x.id === it.id ? { ...x, text } : x)) })} />
+          <Button variant="ghost" size="icon-sm" disabled={j === 0} aria-label={`Пункт ${j + 1} вище`} onClick={() => set({ items: move(d.items, j, j - 1) })}>
+            <ArrowUp aria-hidden />
+          </Button>
+          <Button variant="ghost" size="icon-sm" disabled={j === d.items.length - 1} aria-label={`Пункт ${j + 1} нижче`} onClick={() => set({ items: move(d.items, j, j + 1) })}>
+            <ArrowDown aria-hidden />
+          </Button>
+          <RemoveButton label={`Видалити пункт ${j + 1}`} disabled={d.items.length <= 2} onClick={() => set({ items: d.items.filter(x => x.id !== it.id) })} />
+        </div>
+      ))}
+      <AddButton disabled={d.items.length >= MAX_ITEMS} onClick={() => set({ items: [...d.items, { id: nextId(d.items, "i"), text: "" }] })}>
+        Пункт
+      </AddButton>
+    </fieldset>
+  );
+}
+
+function ItemInput({ label, item, onChange }: { label: string; item: Item; onChange: (text: string) => void }) {
+  return <Input aria-label={label} value={item.text} maxLength={2000} onChange={e => onChange(e.target.value)} />;
+}
+
+function RemoveButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <Button variant="ghost" size="icon-sm" aria-label={label} disabled={disabled} onClick={onClick} className="shrink-0">
+      <X aria-hidden />
+    </Button>
+  );
+}
+
+function AddButton({ disabled, onClick, children }: { disabled: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Button variant="ghost" size="sm" disabled={disabled} onClick={onClick} className="w-fit">
+      <Plus aria-hidden /> {children}
+    </Button>
+  );
+}

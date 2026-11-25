@@ -8,6 +8,9 @@ import { requireStaff } from "@/lib/auth";
 import { watchable } from "@/lib/staff";
 import { dayTime, hhmm } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { createTest } from "./actions";
 
 export default function Dashboard() {
   return (
@@ -80,6 +83,15 @@ async function Home() {
         </section>
       )}
 
+      <section className="flex flex-wrap items-center justify-between gap-3 border-t pt-8">
+        <p className="text-sm text-muted-foreground">Тест можна створити з нуля або зробити копію будь-якого тесту школи на його сторінці.</p>
+        <form action={createTest}>
+          <Button type="submit">
+            <Plus aria-hidden /> Новий тест
+          </Button>
+        </form>
+      </section>
+
       <TestTable title="Мої тести" tests={mine} empty="У вас ще немає тестів." />
       <TestTable title="Інші тести школи" tests={others} empty="Інших тестів поки немає." />
     </div>
@@ -109,7 +121,7 @@ function TestTable({ title, tests, empty }: { title: string; tests: { id: number
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">
                     <Link href={`/dashboard/tests/${t.id}`} className="underline-offset-4 hover:underline">
-                      {t.title}
+                      {t.title || "Без назви"}
                     </Link>
                   </TableCell>
                   <TableCell>{t.subject}</TableCell>

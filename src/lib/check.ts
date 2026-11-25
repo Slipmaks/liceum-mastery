@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { forStudent, grade12, isValidResponse, makeShuffle, scoreAnswer } from "./questions.ts";
 import { hashSecret, verifySecret } from "./secret.ts";
+import { blankQuestion, nextId, parseDraft, problems } from "./draft.ts";
 
 const opts = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `o${i + 1}`, text: "" }));
 const one = { type: "one" as const, points: 1, data: { options: opts(4), correct: ["o2"] } };
@@ -54,5 +55,20 @@ const h = await hashSecret("1234");
 assert.ok(await verifySecret("1234", h));
 assert.ok(!(await verifySecret("1235", h)));
 assert.ok(!(await verifySecret("1234", "garbage")));
+
+// Builder drafts: structure is strict, content may be half-written until the test is opened.
+const meta = { title: "Т", topic: "", subjectId: 1, grade: 9, timeLimitMin: 20 };
+const blank = parseDraft({ ...meta, questions: (["one", "many", "match", "order"] as const).map(blankQuestion) });
+assert.ok(blank, "blank questions save");
+assert.ok(problems(blank).length >= 4, "but are not ready");
+assert.equal(parseDraft({ ...meta, grade: 12, questions: [] }), null);
+assert.equal(parseDraft({ ...meta, questions: [{ ...blankQuestion("one"), type: "essay" }] }), null);
+assert.equal(parseDraft({ ...meta, questions: [{ type: "one", prompt: "", points: 1, data: { options: [{ id: "__proto__", text: "" }], correct: [] } }] }), null);
+const dropped = parseDraft({ ...meta, questions: [{ type: "match", prompt: "", points: 4, data: { left: [{ id: "l1", text: "" }], right: [{ id: "r1", text: "" }], pairs: { l1: "r9", l7: "r1" } } }] });
+assert.deepEqual(dropped?.questions[0].data, { left: [{ id: "l1", text: "" }], right: [{ id: "r1", text: "" }], pairs: {} }, "stale pairs are dropped");
+const ready = { ...meta, questions: [{ type: "one" as const, prompt: "?", points: 1, data: { options: [{ id: "o1", text: "так" }, { id: "o2", text: "ні" }], correct: ["o1"] } }] };
+assert.deepEqual(problems(ready), []);
+assert.deepEqual(problems({ ...ready, title: " " }), ["Немає назви тесту."]);
+assert.equal(nextId([{ id: "o1", text: "" }, { id: "o4", text: "" }], "o"), "o5");
 
 console.log("ok");
