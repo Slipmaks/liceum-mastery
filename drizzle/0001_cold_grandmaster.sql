@@ -1,0 +1,2 @@
+ALTER TABLE "attempts" ADD COLUMN "opened" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "attempts_one_open" ON "attempts" USING btree ("assignment_id","student_id") WHERE "attempts"."status" <> 'finished';

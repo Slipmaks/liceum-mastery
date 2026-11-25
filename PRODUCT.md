@@ -95,6 +95,8 @@ An assignment is a test opened to a class: `test + class + whole_class flag + st
 - **Every answer is saved to the server at once.** Nothing is lost if the device dies.
 - Question order and option order are shuffled **per student**. The shuffle is stored on the attempt.
 - `match` is an NMT answer grid (rows 1–4 × letters А–Д, 48 px cells, an ink cross marks the choice) and `order` uses ↑/↓ buttons. Drag-and-drop is not used. Visual rules live in `DESIGN.md`.
+- An `order` question counts as answered once the student moves an item; the shuffled starting order is not an answer.
+- «Завершити» on the last question opens the answer sheet, which shows how many questions have no answer; the test is submitted from there. A locked attempt cannot be submitted.
 - The browser never receives correct answers. The server strips them before sending questions.
 - After submitting, the student sees only «Вітаю! Ви завершили тест». The student is never shown a score or correct answers.
 
@@ -112,13 +114,14 @@ Every client event is recorded in `attempt_events` with its time. Pagehide is se
 |---|---|---|
 | tab hidden / app minimised (`visibilitychange`) | ✓ | ✓ |
 | page closed (`pagehide`) | ✓ | ✓ |
-| attempt page reopened while in progress (covers a dead phone, where no pagehide arrived) | ✓ | ✓ |
+| attempt page reopened while in progress (covers a dead phone, where no pagehide arrived). The first open after the start or after an unlock is not a reopen. | ✓ | ✓ |
 | fullscreen exited | ✓ | ✓ |
 | login from a second device | ✓ | ✓ |
 | focus lost (`blur`), each time | — | ✓ |
 | copy / cut / paste / context menu attempt | — | ✓ |
 
-- **Locked** means the student sees «Зверніться до вчителя» and the server refuses their answers. The timer keeps running. A teacher who may monitor the attempt presses «Дозволити продовжити», and the unlock is logged as an event too.
+- **Locked** means the student sees «Зверніться до вчителя» and the server refuses their answers. The timer keeps running. A teacher who may monitor the attempt presses «Дозволити продовжити», and the unlock is logged as an event too. The locked screen polls every 5 s and returns to the test by itself.
+- **Switching devices** (a phone died mid-test): the login on the new device is refused and locks the attempt. The unlock also ends the student's other sessions, so they can log in on the new device, and the first open there is not a reopen. One unlock is enough.
 - **Flagged** («можливе списування») is set automatically on any event and cannot be removed. A teacher can add a comment to it, but the grade stays the teacher's call and the system never zeroes it.
 - Expect flags on honest phone users, for example from a notification shade or an incoming call. The flag is information, not a verdict.
 
@@ -182,7 +185,7 @@ A student may start an attempt while `attempts for (assignment, student)` < 1 + 
 
 ## Demo data
 
-- **Ліцей 1** (playground): a director, a deputy, 2 teachers (one is the homeroom teacher of 9-А), 2 classes of 8–10 students, and 3 tests covering all 4 question types. One test already has results, to show the report. The home page has quick-login buttons for each role. They log in only as the seeded Ліцей 1 accounts, so without the seed they do nothing. Every seeded user has the password `demo1234`, every seeded student the PIN `1234`.
+- **Ліцей 1** (playground): a director, a deputy, 2 teachers (one is the homeroom teacher of 9-А), 2 classes of 8–10 students, and 3 tests covering all 4 question types. One test already has results, to show the report, and another is open to 9-А right now, so the student quick login has a test to take. The home page has quick-login buttons for each role. They log in only as the seeded Ліцей 1 accounts, so without the seed they do nothing. Every seeded user has the password `demo1234`, every seeded student the PIN `1234`.
 - **Ліцей 2**: a director and one teacher, with normal login. It exists to show that schools cannot see each other.
 
 ## Deferred, and why

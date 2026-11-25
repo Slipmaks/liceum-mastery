@@ -3,9 +3,9 @@
 import { sql } from "drizzle-orm";
 import { db } from "./index.ts";
 import * as t from "./schema.ts";
-import type { AttemptEventType, QuestionData, Shuffle } from "./schema.ts";
+import type { AttemptEventType, QuestionData } from "./schema.ts";
 import { hashSecret } from "../lib/secret.ts";
-import { scoreAnswer, type AnswerResponse } from "../lib/scoring.ts";
+import { makeShuffle, scoreAnswer, type AnswerResponse } from "../lib/questions.ts";
 
 const PASSWORD = "demo1234";
 const PIN = "1234";
@@ -128,11 +128,6 @@ function respond(q: Q, ok: boolean): AnswerResponse {
   return ids;
 }
 
-function makeShuffle(qs: Q[]): Shuffle {
-  const ids = (q: Q) => ("options" in q.data ? q.data.options : "pairs" in q.data ? q.data.right : q.data.items).map(x => x.id);
-  return { questions: shuffled(qs.map(q => q.id)), options: Object.fromEntries(qs.map(q => [q.id, shuffled(ids(q))])) };
-}
-
 // ---- seed ----
 
 await db.execute(sql`truncate schools restart identity cascade`);
@@ -157,10 +152,12 @@ const history = await createTest(
   { schoolId: l1.id, authorId: historian, subjectId: l1.subject["Історія України"], grade: 9, topic: "Козацька доба", title: "Козацька доба: контрольна робота", timeLimitMin: 20, status: "locked" },
   HISTORY,
 );
-await createTest(
-  { schoolId: l1.id, authorId: mathTeacher, subjectId: l1.subject["Алгебра"], grade: 9, topic: "Квадратні рівняння", title: "Квадратні рівняння", timeLimitMin: 15 },
+// Open to 9-А right now, so the student quick login has a test to take.
+const algebra = await createTest(
+  { schoolId: l1.id, authorId: mathTeacher, subjectId: l1.subject["Алгебра"], grade: 9, topic: "Квадратні рівняння", title: "Квадратні рівняння", timeLimitMin: 15, status: "locked" },
   ALGEBRA,
 );
+await db.insert(t.assignments).values({ testId: algebra.id, classId: c9a.id, openedBy: mathTeacher, wholeClass: true });
 await createTest(
   { schoolId: l1.id, authorId: deputy, subjectId: l1.subject["Українська мова"], grade: 10, topic: "Складне речення", title: "Складне речення: види зв'язку", timeLimitMin: 15 },
   UKRAINIAN,
@@ -195,7 +192,7 @@ for (const st of c9a.students.filter(s => s.name !== absent)) {
     .insert(t.attempts)
     .values({
       assignmentId: assignment.id, studentId: st.id, classId: c9a.id, startedAt, deadlineAt: minutes(startedAt, 20), finishedAt,
-      status: "finished", shuffle: makeShuffle(history.qs), score: answered.reduce((s, a) => s + a.points, 0), maxScore, flagged: ev.length > 0,
+      status: "finished", shuffle: makeShuffle(history.qs, rand), score: answered.reduce((s, a) => s + a.points, 0), maxScore, flagged: ev.length > 0,
     })
     .returning();
   await db.insert(t.answers).values(answered.map(a => ({ ...a, attemptId: attempt.id })));

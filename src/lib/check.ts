@@ -1,6 +1,6 @@
-// Self-check for scoring and secrets. Run: pnpm check
+// Self-check for question logic and secrets. Run: pnpm check
 import assert from "node:assert/strict";
-import { grade12, scoreAnswer } from "./scoring.ts";
+import { forStudent, grade12, isValidResponse, makeShuffle, scoreAnswer } from "./questions.ts";
 import { hashSecret, verifySecret } from "./secret.ts";
 
 const opts = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `o${i + 1}`, text: "" }));
@@ -26,6 +26,29 @@ assert.equal(scoreAnswer(order, { i1: "x" }), 0, "wrong shape scores 0");
 assert.equal(grade12(0, 20), 1);
 assert.equal(grade12(20, 20), 12);
 assert.equal(grade12(10, 20), 6);
+
+// Responses from the browser.
+assert.ok(isValidResponse(one, ["o2"]));
+assert.ok(!isValidResponse(one, ["o1", "o2"]), "one: exactly one pick");
+assert.ok(!isValidResponse(many, ["o1", "o1"]), "no duplicates");
+assert.ok(!isValidResponse(many, ["o9"]), "unknown option");
+assert.ok(!isValidResponse(many, []), "empty is null, not []");
+assert.ok(isValidResponse(match, { l1: "r5" }), "a partial match is fine");
+assert.ok(!isValidResponse(match, { l9: "r1" }));
+assert.ok(!isValidResponse(match, JSON.parse('{"__proto__": "r1"}')));
+assert.ok(!isValidResponse(match, ["r1"]));
+assert.ok(isValidResponse(order, ["i3", "i1", "i2"]));
+assert.ok(!isValidResponse(order, ["i1", "i2"]), "order: a full arrangement");
+assert.ok(!isValidResponse(order, ["i1", "i1", "i2"]));
+
+// The student's view never carries the answer, and follows the shuffle.
+const full = { id: 7, prompt: "?", ...match };
+const shuffle = makeShuffle([full], () => 0.5);
+const view = forStudent(full, ["r5", "r4", "r3", "r2", "r1"]);
+assert.ok(!JSON.stringify(view).includes("pairs") && !JSON.stringify(forStudent({ id: 1, prompt: "?", ...one })).includes("correct"));
+assert.deepEqual(view.kind === "match" && view.right.map(r => r.id), ["r5", "r4", "r3", "r2", "r1"]);
+assert.deepEqual(view.kind === "match" && view.left.map(r => r.id), ["l1", "l2", "l3", "l4"], "rows keep their numbers");
+assert.equal(shuffle.options[7].length, 5);
 
 const h = await hashSecret("1234");
 assert.ok(await verifySecret("1234", h));

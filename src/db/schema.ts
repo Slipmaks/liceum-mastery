@@ -179,9 +179,15 @@ export const attempts = pgTable(
 		maxScore: real().notNull(),
 		/** «можливе списування»: set by any attempt event, never cleared. */
 		flagged: boolean().notNull().default(false),
-		teacherComment: text()
+		teacherComment: text(),
+		/** Set on the first open of the attempt page; a later open is a `reopen` event. An unlock clears it. */
+		opened: boolean().notNull().default(false)
 	},
-	t => [index('attempts_assignment_student').on(t.assignmentId, t.studentId)]
+	t => [
+		index('attempts_assignment_student').on(t.assignmentId, t.studentId),
+		// At most one unfinished attempt per student and assignment: a double-click on «Почати» can't start two.
+		uniqueIndex('attempts_one_open').on(t.assignmentId, t.studentId).where(sql`${t.status} <> 'finished'`)
+	]
 );
 
 export const answers = pgTable(

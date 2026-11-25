@@ -3,9 +3,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, eq, gt, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { assignments, attemptEvents, attempts, sessions, students, users } from "@/db/schema";
+import { attempts, sessions, students, users } from "@/db/schema";
+import { finalizeDue, recordEvent } from "@/lib/attempt";
 
 const COOKIE = "sid";
 const STAFF_TTL = 30 * 86_400_000;
@@ -67,11 +68,11 @@ export async function createSession(owner: { userId: number } | { studentId: num
  * Returns an error message, or null once the session is set.
  */
 export async function startStudentSession(studentId: number): Promise<string | null> {
+  await finalizeDue(eq(attempts.studentId, studentId));
   const [active] = await db
     .select({ id: attempts.id })
     .from(attempts)
-    .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
-    .where(and(eq(attempts.studentId, studentId), ne(attempts.status, "finished"), gt(attempts.deadlineAt, sql`now()`), isNull(assignments.closedAt)))
+    .where(and(eq(attempts.studentId, studentId), ne(attempts.status, "finished")))
     .limit(1);
   if (active) {
     const [other] = await db
@@ -80,10 +81,7 @@ export async function startStudentSession(studentId: number): Promise<string | n
       .where(and(eq(sessions.studentId, studentId), gt(sessions.expiresAt, sql`now()`)))
       .limit(1);
     if (other) {
-      await db.batch([
-        db.insert(attemptEvents).values({ attemptId: active.id, type: "second_device" }),
-        db.update(attempts).set({ status: "locked", flagged: true }).where(eq(attempts.id, active.id)),
-      ]);
+      await recordEvent(active.id, "second_device");
       return "Тест уже відкрито на іншому пристрої. Зверніться до вчителя.";
     }
   }

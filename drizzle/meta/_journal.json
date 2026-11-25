@@ -8,6 +8,13 @@
       "when": 1795547542276,
       "tag": "0000_modern_vin_gonzales",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795617780436,
+      "tag": "0001_cold_grandmaster",
+      "breakpoints": true
     }
   ]
 }
