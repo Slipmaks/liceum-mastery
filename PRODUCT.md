@@ -50,13 +50,19 @@ UI text is Ukrainian. Student screens are designed for phones first and teacher 
 
 ### Teacher accounts
 
-Directors and deputies enter a teacher's email and get an **invite link valid for 7 days**. They send it themselves through Viber or Telegram, because the demo sends no email. On the link the teacher sets a name and password. Later only the delivery changes: Resend sends the same link.
+Directors and deputies enter a teacher's email and get an **invite link valid for 7 days**. They send it themselves through Viber or Telegram, because the demo sends no email. On the link the teacher sets a name and password (at least 8 characters) and is logged in. Later only the delivery changes: Resend sends the same link.
+
+- Only the token's SHA-256 is stored, so the link is shown once, when it is created. A new link for the same email replaces the old one; a pending link can be cancelled.
+- A director invites deputies and teachers, a deputy invites teachers. An email that already has an account cannot be invited.
+- **Staff who leave are archived («Звільнити»), never deleted**, like students: their tests, assignments and results stay. They are logged out at once and cannot log in, and they stop being homeroom teacher of any class.
+- Everyone edits their own name and title, and changes their password with the current one; that logs out their other devices. A forgotten staff password has no reset flow yet: an admin archives the account and sends a new invite to another email, or the super-admin resets it.
 
 ### Student accounts
 
 - The class roster is created **in advance** by the homeroom teacher or an admin. Students do not sign themselves up, because anyone with the class code could otherwise take someone's single attempt.
 - On first login a student enters the class code, picks their name from the roster and sets a PIN of 4 digits. On later logins they pick their name and enter the PIN.
-- After 5 wrong PINs the student is locked out for 15 minutes. If a PIN is lost, the homeroom teacher resets it.
+- After 5 wrong PINs the student is locked out for 15 minutes. If a PIN is lost, the homeroom teacher resets it; the reset also lifts a lockout and ends the student's sessions.
+- Students are added to a class as a list of names, one per line. A class code is 6 characters without look-alikes (no 0/O, 1/I/L), generated when the class is created. Class names are unique within a school.
 - A student who leaves is **archived, never deleted**, so their attempts stay. A student who changes class is moved, and each attempt keeps a snapshot of the `class_id` it started in.
 
 ## Tests
@@ -74,7 +80,7 @@ Directors and deputies enter a teacher's email and get an **invite link valid fo
 - A test has a subject, a grade level (паралель, e.g. 9), a topic, a title and a time limit. Questions **live inside their test**, and there is no shared question bank. To reuse questions, a teacher copies the test.
 - **Lock on first open.** A test is a `draft` until it is first opened to any class, and from then on it is `locked` and read-only. To change it, the teacher makes a copy. Scores are never recalculated after the fact.
 - All teachers of a school can read every school test and copy it to themselves.
-- **Subjects** are per school. A new school is seeded with standard subjects, and admins can add more.
+- **Subjects** are per school. A new school is seeded with standard subjects, and admins can add more. A subject no test or material uses can be deleted.
 - Builder: one page with the test metadata and a list of questions; a teacher adds a question by choosing its type. Drafts autosave. "Переглянути як учень" (preview as a student) is available.
   - Only the author edits their own draft. Anyone on the staff can copy any school test; the copy is a draft of theirs titled «… (копія)». The author can delete a draft; a locked test is never deleted.
   - A new question starts in NMT shape: 4 options (`one`), 5 options (`many`), 4 rows × 5 letters (`match`), 4 items (`order`). Up to 8 items per list.
@@ -169,7 +175,7 @@ All `id`s are integers. All school-owned tables carry `school_id`. Timestamps ar
 
 ```
 schools        id, name
-users          id, school_id, email (unique), name, password_hash, rank (director|deputy|teacher), title
+users          id, school_id, email (unique), name, password_hash, rank (director|deputy|teacher), title, archived_at
 invites        token_hash, school_id, email, rank, invited_by, expires_at, used_at
 sessions       id (sha256 of token), user_id | student_id, expires_at
 subjects       id, school_id, name

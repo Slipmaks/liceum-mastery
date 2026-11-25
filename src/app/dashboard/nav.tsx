@@ -3,34 +3,41 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Library } from "lucide-react";
+import { FileText, Library, School, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export type Section = "classes" | "school";
 const NAV = [
   { href: "/dashboard", label: "Тести", icon: FileText },
+  { href: "/dashboard/classes", label: "Класи", icon: Users, only: "classes" },
   { href: "/dashboard/materials", label: "Матеріали", icon: Library },
-];
+  { href: "/dashboard/school", label: "Школа", icon: School, only: "school" },
+] as const;
 
-/** With Cache Components the pathname is request data, so it streams in; until then the links show without a highlight. */
-export function Nav({ className }: { className?: string }) {
+/**
+ * `sections`: the role-dependent sections this user may open (classes: admins and homeroom teachers; school: admins).
+ * With Cache Components the pathname is request data, so it streams in; until then the links show without a highlight.
+ */
+export function Nav({ className, sections = [] }: { className?: string; sections?: Section[] }) {
+  const props = { className, sections };
   return (
-    <Suspense fallback={<Links className={className} />}>
-      <Current className={className} />
+    <Suspense fallback={<Links {...props} />}>
+      <Current {...props} />
     </Suspense>
   );
 }
 
-function Current({ className }: { className?: string }) {
+function Current(props: { className?: string; sections: Section[] }) {
   const path = usePathname();
   // Everything under /dashboard that isn't another section is about tests.
   const current = NAV.findLast(n => path === n.href || path.startsWith(`${n.href}/`))?.href;
-  return <Links className={className} current={current} />;
+  return <Links {...props} current={current} />;
 }
 
-function Links({ className, current }: { className?: string; current?: string }) {
+function Links({ className, sections, current }: { className?: string; sections: Section[]; current?: string }) {
   return (
     <nav aria-label="Розділи" className={cn("flex flex-col gap-0.5 px-3", className)}>
-      {NAV.map(({ href, label, icon: Icon }) => (
+      {NAV.filter(n => !("only" in n) || sections.includes(n.only)).map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
           href={href}

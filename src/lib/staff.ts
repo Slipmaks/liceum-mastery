@@ -2,12 +2,13 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  answers, assignmentStudents, assignments, attemptEvents, attempts, classes, materials, questions, retakeGrants, students, subjects, tests,
+  answers, assignmentStudents, assignments, attemptEvents, attempts, classes, materials, questions, retakeGrants, students, subjects, tests, users,
   type AttemptEventType,
 } from "@/db/schema";
 import type { Staff } from "@/lib/auth";
 import { finalizeDue } from "@/lib/attempt";
 import { grade12 } from "@/lib/questions";
+import type { Rank } from "@/lib/staff-labels";
 
 /** Director and deputy have the same rights over tests and results. */
 export const isAdmin = (me: Staff) => me.rank !== "teacher";
@@ -164,6 +165,29 @@ export const pts = (n: number) => new Intl.NumberFormat("uk", { maximumFractionD
 /** The school's subjects in Ukrainian alphabetical order (the database collation puts «І» before «А»). */
 export async function schoolSubjects(schoolId: number) {
   const list = await db.select({ id: subjects.id, name: subjects.name }).from(subjects).where(eq(subjects.schoolId, schoolId));
+  const collator = new Intl.Collator("uk");
+  return list.sort((a, b) => collator.compare(a.name, b.name));
+}
+
+// ---- school management: PRODUCT.md › People and permissions ----
+
+const LEVEL: Record<Rank, number> = { director: 3, deputy: 2, teacher: 1 };
+
+/** A user may change only users of strictly lower rank (and their own profile). */
+export const outranks = (me: Staff, rank: Rank) => LEVEL[me.rank] > LEVEL[rank];
+/** The ranks the caller may invite or assign: director → deputy, teacher; deputy → teacher. */
+export const assignableRanks = (me: Staff) => (["deputy", "teacher"] as const).filter(r => outranks(me, r));
+
+/** A class of the caller's school, if they may manage its roster: admins, and its homeroom teacher. */
+export async function getClass(id: number, me: Staff) {
+  if (!Number.isInteger(id)) return null;
+  const [c] = await db.select().from(classes).where(and(eq(classes.id, id), eq(classes.schoolId, me.schoolId)));
+  return c && (isAdmin(me) || c.homeroomTeacherId === me.id) ? c : null;
+}
+
+/** Active staff of the school, for the homeroom teacher picker. */
+export async function schoolTeachers(schoolId: number) {
+  const list = await db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.schoolId, schoolId), isNull(users.archivedAt)));
   const collator = new Intl.Collator("uk");
   return list.sort((a, b) => collator.compare(a.name, b.name));
 }

@@ -23,14 +23,17 @@ export const getSession = cache(async (): Promise<Staff | Student | null> => {
   if (!token) return null;
   const [row] = await db
     .select({
-      user: { id: users.id, schoolId: users.schoolId, name: users.name, rank: users.rank, title: users.title },
+      user: { id: users.id, schoolId: users.schoolId, name: users.name, rank: users.rank, title: users.title, archivedAt: users.archivedAt },
       student: { id: students.id, schoolId: students.schoolId, classId: students.classId, name: students.name, archivedAt: students.archivedAt },
     })
     .from(sessions)
     .leftJoin(users, eq(users.id, sessions.userId))
     .leftJoin(students, eq(students.id, sessions.studentId))
     .where(and(eq(sessions.id, sha256(token)), gt(sessions.expiresAt, sql`now()`)));
-  if (row?.user) return { kind: "staff", ...row.user };
+  if (row?.user && !row.user.archivedAt) {
+    const { id, schoolId, name, rank, title } = row.user;
+    return { kind: "staff", id, schoolId, name, rank, title };
+  }
   if (row?.student && !row.student.archivedAt) {
     const { id, schoolId, classId, name } = row.student;
     return { kind: "student", id, schoolId, classId, name };
@@ -88,6 +91,12 @@ export async function startStudentSession(studentId: number): Promise<string | n
   await db.delete(sessions).where(eq(sessions.studentId, studentId));
   await createSession({ studentId });
   return null;
+}
+
+/** The id (token hash) of this request's session, to keep it when ending the others. */
+export async function currentSessionId() {
+  const token = (await cookies()).get(COOKIE)?.value;
+  return token ? sha256(token) : "";
 }
 
 /** Server Actions only. */

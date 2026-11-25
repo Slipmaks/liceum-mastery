@@ -1,8 +1,9 @@
 "use server";
 import { redirect } from "next/navigation";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { classes, students, users } from "@/db/schema";
+import { classes, invites, students, users } from "@/db/schema";
 import { createSession, destroySession, startStudentSession } from "@/lib/auth";
 import { hashSecret, verifySecret } from "@/lib/secret";
 
@@ -15,7 +16,10 @@ const DUMMY_HASH = "FhUYEBnafY_jhjYcOsegpw.J6I2Qps4FHD2b-vbiU7Stfdw-eWtKSfmxp41d
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
 export async function loginStaff(_: FormState, fd: FormData): Promise<FormState> {
-  const [u] = await db.select({ id: users.id, hash: users.passwordHash }).from(users).where(eq(users.email, str(fd, "email").toLowerCase()));
+  const [u] = await db
+    .select({ id: users.id, hash: users.passwordHash })
+    .from(users)
+    .where(and(eq(users.email, str(fd, "email").toLowerCase()), isNull(users.archivedAt)));
   const ok = await verifySecret(String(fd.get("password") ?? ""), u?.hash ?? DUMMY_HASH);
   if (!u || !ok) return { error: "Невірний email або пароль.", email: str(fd, "email") };
   await createSession({ userId: u.id });
@@ -88,7 +92,7 @@ export async function quickLogin(_: FormState, fd: FormData): Promise<FormState>
     redirect("/student");
   }
   const email = Object.hasOwn(DEMO_STAFF, role) ? DEMO_STAFF[role] : null;
-  const [u] = email ? await db.select({ id: users.id }).from(users).where(eq(users.email, email)) : [];
+  const [u] = email ? await db.select({ id: users.id }).from(users).where(and(eq(users.email, email), isNull(users.archivedAt))) : [];
   if (!u) return { error: "Демо-дані не знайдено." };
   await createSession({ userId: u.id });
   redirect("/dashboard");
@@ -97,4 +101,30 @@ export async function quickLogin(_: FormState, fd: FormData): Promise<FormState>
 export async function logout() {
   await destroySession();
   redirect("/");
+}
+
+/** Accepting an invite: the invitee sets their name and password, then is logged in (PRODUCT.md › Teacher accounts). */
+export async function acceptInvite(_: FormState, fd: FormData): Promise<FormState> {
+  const name = str(fd, "name").slice(0, 200);
+  const password = String(fd.get("password") ?? "");
+  if (!name) return { error: "Вкажіть ім’я." };
+  if (password.length < 8) return { error: "Пароль має бути не коротшим за 8 символів." };
+  if (password !== String(fd.get("repeat") ?? "")) return { error: "Паролі не збігаються." };
+
+  const tokenHash = createHash("sha256").update(str(fd, "token")).digest("hex");
+  const open = and(eq(invites.tokenHash, tokenHash), isNull(invites.usedAt), gt(invites.expiresAt, sql`now()`));
+  const [invite] = await db.select().from(invites).where(open);
+  if (!invite) return { error: "Посилання вже використано або воно застаріло. Попросіть нове." };
+  const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, invite.email));
+  if (taken) return { error: "Користувач з цим email уже є. Увійдіть зі своїм паролем." };
+
+  // Claim the invite first: a double submit can't create two accounts.
+  const [claimed] = await db.update(invites).set({ usedAt: sql`now()` }).where(open).returning({ email: invites.email });
+  if (!claimed) return { error: "Посилання вже використано." };
+  const [u] = await db
+    .insert(users)
+    .values({ schoolId: invite.schoolId, email: invite.email, name, rank: invite.rank, passwordHash: await hashSecret(password) })
+    .returning({ id: users.id });
+  await createSession({ userId: u.id });
+  redirect("/dashboard");
 }

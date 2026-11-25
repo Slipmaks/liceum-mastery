@@ -30,6 +30,8 @@ export const users = pgTable(
 		rank: rank().notNull(),
 		/** Display title only («Директор», «Заступник з НВР»); rights come from rank. */
 		title: text(),
+		/** Staff who left are archived, never deleted: their tests and results stay. They can't log in. */
+		archivedAt: at(),
 		createdAt: createdAt()
 	},
 	t => [
