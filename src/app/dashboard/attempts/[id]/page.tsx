@@ -1,5 +1,6 @@
 // One student's attempt: event log, answers against the key, the teacher's comment, and retakes (PRODUCT.md › Anti-cheat, Retakes).
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
@@ -11,9 +12,9 @@ import { EVENT_LABEL } from "@/lib/attempt";
 import { getAssignment, pts } from "@/lib/staff";
 import { answerLines, correctResponse, grade12, type AnswerResponse } from "@/lib/questions";
 import { dayTime, hhmm } from "@/lib/format";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { grantRetake, saveComment } from "../../actions";
+import { CommentForm, RetakeForm } from "./attempt-forms";
+
+export const metadata: Metadata = { title: "Спроба учня" };
 
 export default function AttemptPage({ params }: PageProps<"/dashboard/attempts/[id]">) {
   return (
@@ -83,13 +84,7 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
         <section className="grid gap-2">
           <h2 className="font-semibold">Коментар до позначки «можливе списування»</h2>
           <p className="text-sm text-muted-foreground">Позначка лишається назавжди, а оцінку вирішує вчитель: система нічого не обнуляє.</p>
-          <form action={saveComment} className="flex flex-wrap gap-2">
-            <input type="hidden" name="attempt" value={id} />
-            <Input name="comment" defaultValue={at.teacherComment ?? ""} placeholder="Наприклад: сповіщення на телефоні, перевірено" className="min-w-64 flex-1" />
-            <Button type="submit" variant="outline">
-              Зберегти
-            </Button>
-          </form>
+          <CommentForm attemptId={id} defaultValue={at.teacherComment ?? ""} />
         </section>
       )}
 
@@ -133,15 +128,7 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
               </li>
             ))}
           </ul>
-          {canRetake && (
-            <form action={grantRetake} className="mt-2 flex flex-wrap gap-2">
-              <input type="hidden" name="attempt" value={id} />
-              <Input name="reason" required placeholder="Причина, наприклад: хворів, заблоковано помилково" className="min-w-64 flex-1" />
-              <Button type="submit" variant="outline">
-                Дозволити повторну спробу
-              </Button>
-            </form>
-          )}
+          {canRetake && <RetakeForm attemptId={id} />}
         </section>
       )}
 
@@ -163,12 +150,12 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-muted-foreground">Відповідь учня</p>
-                    {g ? answerLines(q.data, g.response as AnswerResponse).map(l => <p key={l}>{l}</p>) : <p className="text-muted-foreground">—</p>}
+                    {g ? answerLines(q.data, g.response as AnswerResponse).map((l, idx) => <p key={`${idx}-${l}`}>{l}</p>) : <p className="text-muted-foreground">—</p>}
                   </div>
                   <div>
                     <p className="text-muted-foreground">Правильно</p>
-                    {answerLines(q.data, correctResponse(q.data)).map(l => (
-                      <p key={l}>{l}</p>
+                    {answerLines(q.data, correctResponse(q.data)).map((l, idx) => (
+                      <p key={`${idx}-${l}`}>{l}</p>
                     ))}
                   </div>
                 </div>

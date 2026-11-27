@@ -123,6 +123,8 @@ export async function grantRetake(fd: FormData) {
   revalidatePath(`/dashboard/attempts/${attemptId}`);
 }
 
+export type AttemptActionState = { error?: string; ok?: boolean; value?: string; at?: number } | undefined;
+
 /** The teacher's note on a flagged attempt. The flag itself is never cleared and the score is never changed. */
 export async function saveComment(fd: FormData) {
   const attemptId = num(fd, "attempt");
@@ -130,6 +132,31 @@ export async function saveComment(fd: FormData) {
   const comment = String(fd.get("comment") ?? "").trim();
   await db.update(attempts).set({ teacherComment: comment || null }).where(eq(attempts.id, attemptId));
   revalidatePath(`/dashboard/attempts/${attemptId}`);
+}
+
+export async function saveCommentState(_: AttemptActionState, fd: FormData): Promise<AttemptActionState> {
+  const attemptId = num(fd, "attempt");
+  await watchedAttempt(attemptId);
+  const comment = String(fd.get("comment") ?? "").trim().slice(0, 500);
+  await db.update(attempts).set({ teacherComment: comment || null }).where(eq(attempts.id, attemptId));
+  revalidatePath(`/dashboard/attempts/${attemptId}`);
+  return { ok: true, value: comment, at: Date.now() };
+}
+
+export async function grantRetakeState(_: AttemptActionState, fd: FormData): Promise<AttemptActionState> {
+  const attemptId = num(fd, "attempt");
+  const { me, t, a } = await watchedAttempt(attemptId);
+  const reason = String(fd.get("reason") ?? "").trim().slice(0, 300);
+  if (!reason) return { error: "Вкажіть причину повторної спроби.", value: "", at: Date.now() };
+  if (t.status !== "finished") return { error: "Поточну спробу ще не завершено.", value: reason, at: Date.now() };
+  const [[{ tries }], [{ grants }]] = await db.batch([
+    db.select({ tries: sql<number>`count(*)::int` }).from(attempts).where(and(eq(attempts.assignmentId, a.id), eq(attempts.studentId, t.studentId))),
+    db.select({ grants: sql<number>`count(*)::int` }).from(retakeGrants).where(and(eq(retakeGrants.assignmentId, a.id), eq(retakeGrants.studentId, t.studentId))),
+  ]);
+  if (grants >= tries) return { error: "Повторну спробу вже надано.", value: reason, at: Date.now() };
+  await db.insert(retakeGrants).values({ assignmentId: a.id, studentId: t.studentId, grantedBy: me.id, reason });
+  revalidatePath(`/dashboard/attempts/${attemptId}`);
+  return { ok: true, value: "", at: Date.now() };
 }
 
 // ---- test builder ----

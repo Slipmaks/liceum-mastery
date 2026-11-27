@@ -1,5 +1,6 @@
 // The live monitor of an open assignment (PRODUCT.md › Teacher views). A closed one goes to its report.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
@@ -9,9 +10,11 @@ import { requireStaff } from "@/lib/auth";
 import { EVENT_LABEL } from "@/lib/attempt";
 import { getAssignment, loadResults } from "@/lib/staff";
 import { hhmm, mmss } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { addStudents } from "../../actions";
 import { Monitor, type MonitorRow } from "./monitor";
+
+export const metadata: Metadata = { title: "Моніторинг" };
 
 export default function MonitorPage({ params }: PageProps<"/dashboard/assignments/[id]">) {
   return (
@@ -83,9 +86,9 @@ async function Live({ params }: Pick<PageProps<"/dashboard/assignments/[id]">, "
                 </label>
               ))}
             </div>
-            <Button type="submit" variant="outline" className="w-fit">
+            <SubmitButton variant="outline" className="w-fit" pendingLabel="Додаю…">
               Додати
-            </Button>
+            </SubmitButton>
           </form>
         </details>
       )}

@@ -1,16 +1,19 @@
 // Student login: class code → pick your name → PIN (set on first login). PRODUCT.md › Student accounts.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { ChevronRight } from "lucide-react";
 import { db } from "@/db";
 import { classes, schools, students } from "@/db/schema";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormError } from "@/components/form-error";
+import { SubmitButton } from "@/components/submit-button";
 import { PinForm } from "./pin-form";
+import { RosterPicker } from "./roster-picker";
+
+export const metadata: Metadata = { title: "Вхід для учня" };
 
 const collator = new Intl.Collator("uk");
 
@@ -58,19 +61,7 @@ async function Step({ searchParams }: Pick<PageProps<"/student/login">, "searchP
           {heading}
           <h1 className="text-2xl font-semibold">Оберіть своє ім’я</h1>
         </header>
-        <ul className="grid gap-2">
-          {roster.map(s => (
-            <li key={s.id}>
-              <Link
-                href={`/student/login?code=${encodeURIComponent(code)}&s=${s.id}`}
-                className="flex h-14 items-center justify-between rounded-lg border bg-card px-3 text-base hover:bg-muted"
-              >
-                {s.name}
-                <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <RosterPicker code={code} roster={roster.map(s => ({ id: s.id, name: s.name }))} />
         <BackLink href="/student/login">Інший код класу</BackLink>
       </>
     );
@@ -92,17 +83,32 @@ function CodeForm({ code, error }: { code?: string; error?: string }) {
   return (
     <>
       <h1 className="text-2xl font-semibold">Вхід для учня</h1>
-      <Form action="/student/login" className="grid gap-4">
+      <Form action="/student/login" className="grid gap-4 rounded-lg border bg-card p-5">
         <div className="grid gap-2">
           <Label htmlFor="code" className="text-base">
             Код класу
           </Label>
-          <Input id="code" name="code" defaultValue={code} required autoFocus autoCapitalize="characters" autoComplete="off" spellCheck={false} className="h-12 text-base uppercase" />
+          <Input
+            id="code"
+            name="code"
+            defaultValue={code}
+            required
+            autoFocus
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Напр. L1-9A"
+            aria-describedby="code-hint"
+            className="h-12 font-mono text-lg tracking-widest uppercase tabular-nums"
+          />
+          <p id="code-hint" className="text-sm text-muted-foreground">
+            Код класу запитайте в учителя або класного керівника.
+          </p>
         </div>
         <FormError>{error}</FormError>
-        <Button type="submit" className="h-12 text-base">
+        <SubmitButton className="h-12 text-base" pendingLabel="Шукаю…">
           Далі
-        </Button>
+        </SubmitButton>
       </Form>
       <BackLink href="/">На головну</BackLink>
     </>
@@ -111,7 +117,7 @@ function CodeForm({ code, error }: { code?: string; error?: string }) {
 
 function BackLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="py-2 text-muted-foreground underline-offset-4 hover:underline">
+    <Link href={href} className="inline-flex min-h-12 w-fit items-center text-base text-muted-foreground underline-offset-4 hover:underline">
       {children}
     </Link>
   );

@@ -1,5 +1,6 @@
 // A test as staff see it: every teacher of the school may read it (PRODUCT.md › Tests). Admins and the author open it to a class.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -12,10 +13,14 @@ import { answerLines, correctResponse } from "@/lib/questions";
 import { problems, TYPE_LABEL } from "@/lib/draft";
 import { dayTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
+import { SubmitButton } from "@/components/submit-button";
 import { Copy, Eye, Pencil, Trash2 } from "lucide-react";
 import { copyTest, deleteDraft, openTest } from "../../actions";
 import { ConfirmForm } from "@/components/confirm-form";
+
+export const metadata: Metadata = { title: "Тест" };
 
 const collator = new Intl.Collator("uk");
 
@@ -75,7 +80,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
         )}
         <div className="mt-4 flex flex-wrap gap-2">
           {editable && (
-            <Button asChild>
+            <Button asChild variant={sp.class ? "outline" : "default"}>
               <Link href={`/dashboard/tests/${id}/edit`}>
                 <Pencil aria-hidden /> Редагувати
               </Link>
@@ -88,12 +93,18 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
           </Button>
           <form action={copyTest}>
             <input type="hidden" name="test" value={id} />
-            <Button type="submit" variant="outline">
+            <SubmitButton variant="outline" pendingLabel="Копіюю…">
               <Copy aria-hidden /> Зробити копію
-            </Button>
+            </SubmitButton>
           </form>
           {editable && (
-            <ConfirmForm action={deleteDraft} message="Видалити цю чернетку разом з питаннями?">
+            <ConfirmForm
+              action={deleteDraft}
+              title="Видалити чернетку?"
+              message="Видалити цю чернетку разом з питаннями? Цю дію не можна скасувати."
+              confirmLabel="Видалити чернетку"
+              pendingLabel="Видаляю…"
+            >
               <input type="hidden" name="test" value={id} />
               <Button type="submit" variant="ghost">
                 <Trash2 aria-hidden /> Видалити
@@ -121,7 +132,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
           <Form action={`/dashboard/tests/${id}`} className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1.5 text-sm">
               Клас
-              <select name="class" defaultValue={String(sp.class ?? "")} className="h-9 rounded-md border border-input bg-background px-2.5">
+              <Select name="class" defaultValue={String(sp.class ?? "")}>
                 <option value="" disabled>
                   Оберіть клас
                 </option>
@@ -130,13 +141,13 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <Button type="submit" variant="outline">
               Далі
             </Button>
           </Form>
-          {sp.class && <OpenForm testId={id} classId={Number(sp.class)} schoolId={me.schoolId} empty={!!sp.empty} />}
+          {sp.class && <OpenForm testId={id} classId={Number(sp.class)} schoolId={me.schoolId} empty={!!sp.empty} isDraft={test.status === "draft"} />}
         </section>
       )}
 
@@ -191,7 +202,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
   );
 }
 
-async function OpenForm({ testId, classId, schoolId, empty }: { testId: number; classId: number; schoolId: number; empty: boolean }) {
+async function OpenForm({ testId, classId, schoolId, empty, isDraft }: { testId: number; classId: number; schoolId: number; empty: boolean; isDraft: boolean }) {
   const roster = Number.isInteger(classId)
     ? await db
         .select({ id: students.id, name: students.name })
@@ -201,8 +212,8 @@ async function OpenForm({ testId, classId, schoolId, empty }: { testId: number; 
     : [];
   if (roster.length === 0) return <p className="text-sm text-muted-foreground">У цьому класі немає учнів.</p>;
   roster.sort((a, b) => collator.compare(a.name, b.name));
-  return (
-    <form action={openTest} className="group grid gap-3 border-t pt-3">
+  const fields = (
+    <>
       <input type="hidden" name="test" value={testId} />
       <input type="hidden" name="class" value={classId} />
       <label className="flex items-center gap-2 text-sm font-medium">
@@ -219,9 +230,34 @@ async function OpenForm({ testId, classId, schoolId, empty }: { testId: number; 
         ))}
       </fieldset>
       <FormError>{empty ? "Оберіть хоча б одного учня або весь клас." : undefined}</FormError>
-      <Button type="submit" className="w-fit">
+    </>
+  );
+
+  if (isDraft) {
+    return (
+      <ConfirmForm
+        action={openTest}
+        variant="default"
+        className="group grid gap-3 border-t pt-3"
+        title="Відкрити й зафіксувати тест?"
+        message="Після першого відкриття тест не можна буде змінити — редагувати можна лише копію."
+        confirmLabel="Відкрити тест"
+        pendingLabel="Відкриваю…"
+      >
+        {fields}
+        <Button type="submit" className="w-fit">
+          Відкрити тест
+        </Button>
+      </ConfirmForm>
+    );
+  }
+
+  return (
+    <form action={openTest} className="group grid gap-3 border-t pt-3">
+      {fields}
+      <SubmitButton className="w-fit" pendingLabel="Відкриваю…">
         Відкрити тест
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

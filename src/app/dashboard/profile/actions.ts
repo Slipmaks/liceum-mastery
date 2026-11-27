@@ -9,11 +9,16 @@ import { hashSecret, verifySecret } from "@/lib/secret";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
-export async function updateProfile(fd: FormData) {
+export type ProfileState = { error?: string; ok?: boolean; values?: { name: string; title: string }; at: number } | undefined;
+
+export async function updateProfile(_: ProfileState, fd: FormData): Promise<ProfileState> {
   const me = await requireStaff();
   const name = str(fd, "name").slice(0, 200);
-  if (name) await db.update(users).set({ name, title: str(fd, "title").slice(0, 200) || null }).where(eq(users.id, me.id));
+  const title = str(fd, "title").slice(0, 200);
+  if (!name) return { error: "Вкажіть ім’я.", values: { name: "", title }, at: Date.now() };
+  await db.update(users).set({ name, title: title || null }).where(eq(users.id, me.id));
   revalidatePath("/dashboard", "layout");
+  return { ok: true, values: { name, title }, at: Date.now() };
 }
 
 export type PasswordState = { error?: string; ok?: boolean } | undefined;

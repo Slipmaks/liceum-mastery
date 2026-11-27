@@ -1,5 +1,6 @@
 // One class: the code students log in with, and the roster (PRODUCT.md › Student accounts).
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq, ne, sql } from "drizzle-orm";
@@ -8,10 +9,14 @@ import { classes, students } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { getClass, isAdmin, schoolTeachers } from "@/lib/staff";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { ConfirmForm } from "@/components/confirm-form";
+import { SubmitButton } from "@/components/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { addStudents, archiveStudent, moveStudent, resetPin, restoreStudent, updateClass } from "../actions";
-import { ClassFields } from "../class-fields";
+import { archiveStudent, moveStudent, resetPin, restoreStudent } from "../actions";
+import { AddStudentsForm, UpdateClassForm } from "../class-forms";
+
+export const metadata: Metadata = { title: "Клас" };
 
 const collator = new Intl.Collator("uk", { numeric: true });
 
@@ -58,25 +63,19 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
         </div>
         <div className="rounded-lg border bg-card px-4 py-2 text-right">
           <p className="text-sm text-muted-foreground">Код для входу учнів</p>
-          <p className="font-mono text-2xl font-semibold tracking-widest">{c.code}</p>
+          <p className="font-mono text-2xl font-semibold tracking-widest tabular-nums">{c.code}</p>
         </div>
       </header>
 
       {isAdmin(me) && (
         <details className="max-w-xl rounded-lg border bg-card p-4">
           <summary className="cursor-pointer text-sm font-medium">Змінити клас</summary>
-          <form action={updateClass} className="mt-3 grid gap-3">
-            <input type="hidden" name="class" value={c.id} />
-            <ClassFields teachers={await schoolTeachers(me.schoolId)} values={c} />
-            <Button type="submit" variant="outline" className="w-fit">
-              Зберегти
-            </Button>
-          </form>
+          <UpdateClassForm classId={c.id} teachers={await schoolTeachers(me.schoolId)} values={c} />
         </details>
       )}
 
       <section className="grid gap-3">
-        <h2 className="text-lg font-semibold">Учні · {active.length}</h2>
+        <h2 className="text-lg font-semibold tabular-nums">Учні · {active.length}</h2>
         {active.length > 0 && (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <Table>
@@ -101,7 +100,13 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
                     <TableCell>
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         {(s.hasPin || s.locked) && (
-                          <ConfirmForm action={resetPin} message={`Скинути PIN для ${s.name}? Учень придумає новий під час наступного входу.`}>
+                          <ConfirmForm
+                            action={resetPin}
+                            title="Скинути PIN учня?"
+                            message={`Скинути PIN для ${s.name}? Учень придумає новий під час наступного входу.`}
+                            confirmLabel="Скинути PIN"
+                            pendingLabel="Скидаю…"
+                          >
                             <input type="hidden" name="student" value={s.id} />
                             <Button type="submit" variant="ghost" size="sm">
                               Скинути PIN
@@ -111,7 +116,7 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
                         {others.length > 0 && (
                           <form action={moveStudent} className="flex items-center gap-1">
                             <input type="hidden" name="student" value={s.id} />
-                            <select name="to" required defaultValue="" aria-label={`Перевести ${s.name} до класу`} className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+                            <Select name="to" required defaultValue="" aria-label={`Перевести ${s.name} до класу`} className="h-8 px-2">
                               <option value="" disabled>
                                 До класу…
                               </option>
@@ -120,13 +125,19 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
                                   {o.name}
                                 </option>
                               ))}
-                            </select>
-                            <Button type="submit" variant="ghost" size="sm">
+                            </Select>
+                            <SubmitButton variant="ghost" size="sm" pendingLabel="Переводжу…">
                               Перевести
-                            </Button>
+                            </SubmitButton>
                           </form>
                         )}
-                        <ConfirmForm action={archiveStudent} message={`Перенести ${s.name} в архів? Результати учня збережуться.`}>
+                        <ConfirmForm
+                          action={archiveStudent}
+                          title="Перенести учня в архів?"
+                          message={`Перенести ${s.name} в архів? Результати учня збережуться.`}
+                          confirmLabel="В архів"
+                          pendingLabel="Архівую…"
+                        >
                           <input type="hidden" name="student" value={s.id} />
                           <Button type="submit" variant="ghost" size="sm">
                             В архів
@@ -140,37 +151,21 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
             </Table>
           </div>
         )}
-        <form action={addStudents} className="grid max-w-xl gap-2">
-          <input type="hidden" name="class" value={c.id} />
-          <label htmlFor="names" className="text-sm font-medium">
-            Додати учнів: прізвище та ім’я, по одному в рядку
-          </label>
-          <textarea
-            id="names"
-            name="names"
-            required
-            rows={4}
-            placeholder={"Бондаренко Аліна\nВасильченко Максим"}
-            className="w-full rounded-md border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-          <Button type="submit" variant="outline" className="w-fit">
-            Додати
-          </Button>
-        </form>
+        <AddStudentsForm classId={c.id} />
       </section>
 
       {archived.length > 0 && (
         <details className="max-w-xl">
-          <summary className="cursor-pointer text-sm font-medium">Архів · {archived.length}</summary>
+          <summary className="cursor-pointer text-sm font-medium tabular-nums">Архів · {archived.length}</summary>
           <ul className="mt-2 grid text-sm">
             {archived.map(s => (
               <li key={s.id} className="flex items-center justify-between gap-4 border-b py-1">
                 {s.name}
                 <form action={restoreStudent}>
                   <input type="hidden" name="student" value={s.id} />
-                  <Button type="submit" variant="ghost" size="sm">
+                  <SubmitButton variant="ghost" size="sm" pendingLabel="Повертаю…">
                     Повернути
-                  </Button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}

@@ -1,5 +1,6 @@
 // Report: students × questions (PRODUCT.md › Teacher views). Exports to CSV next door.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, TriangleAlert } from "lucide-react";
@@ -8,6 +9,8 @@ import { buildReport, getAssignment, pts } from "@/lib/staff";
 import { dayTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+export const metadata: Metadata = { title: "Звіт" };
 
 export default function ReportPage({ params }: PageProps<"/dashboard/assignments/[id]/report">) {
   return (

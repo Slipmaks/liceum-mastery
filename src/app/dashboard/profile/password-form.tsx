@@ -3,7 +3,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FormError } from "@/components/form-error";
+import { FormError, FormStatus } from "@/components/form-error";
 import { changePassword } from "./actions";
 
 export function PasswordForm() {
@@ -23,13 +23,9 @@ export function PasswordForm() {
         <Input id="repeat" name="repeat" type="password" required minLength={8} autoComplete="new-password" />
       </div>
       <FormError>{state?.error}</FormError>
-      {state?.ok && (
-        <p role="status" className="text-sm">
-          Пароль змінено. На інших пристроях потрібно буде увійти знову.
-        </p>
-      )}
+      {state?.ok && <FormStatus>Пароль змінено. На інших пристроях потрібно буде увійти знову.</FormStatus>}
       <Button type="submit" variant="outline" disabled={pending} className="w-fit">
-        Змінити пароль
+        {pending ? "Змінюю…" : "Змінити пароль"}
       </Button>
     </form>
   );

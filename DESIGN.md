@@ -15,6 +15,7 @@ colors:
   ink-deep: "oklch(0.36 0.14 263)"
   focus-ink: "oklch(0.55 0.15 263)"
   lock-red: "oklch(0.53 0.2 27)"
+  lock-red-ink: "oklch(0.17 0.03 27)"
   lock-red-soft: "oklch(0.965 0.025 27)"
   caution-amber: "oklch(0.75 0.15 72)"
   caution-amber-text: "oklch(0.47 0.11 60)"

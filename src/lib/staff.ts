@@ -149,7 +149,7 @@ export async function buildReport(a: Assignment) {
       cells: questions.map(q => (t ? (r.points.get(q.id) ?? 0) : null)),
       score: done ? (t.score ?? 0) : null,
       grade: done ? grade12(t.score ?? 0, t.maxScore) : null,
-      state: !t ? "не писав" : done ? "" : "пише",
+      state: !t ? "не писав" : done ? "" : t.status === "locked" ? "заблоковано" : "пише",
     };
   });
   const finished = lines.filter(l => l.score !== null);

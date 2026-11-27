@@ -54,7 +54,7 @@ Directors and deputies enter a teacher's email and get an **invite link valid fo
 
 - Only the token's SHA-256 is stored, so the link is shown once, when it is created. A new link for the same email replaces the old one; a pending link can be cancelled.
 - A director invites deputies and teachers, a deputy invites teachers. An email that already has an account cannot be invited.
-- **Staff who leave are archived («Звільнити»), never deleted**, like students: their tests, assignments and results stay. They are logged out at once and cannot log in, and they stop being homeroom teacher of any class.
+- **Staff who leave are archived («Звільнити»), never deleted**, like students: their tests, assignments and results stay. They are logged out at once and cannot log in, and they stop being homeroom teacher of any class. An admin who outranks them can restore them from the archive on the school page.
 - Everyone edits their own name and title, and changes their password with the current one; that logs out their other devices. A forgotten staff password has no reset flow yet: an admin archives the account and sends a new invite to another email, or the super-admin resets it.
 
 ### Student accounts
@@ -105,10 +105,10 @@ An assignment is a test opened to a class: `test + class + whole_class flag + st
 - **Every answer is saved to the server at once.** Nothing is lost if the device dies.
 - Question order and option order are shuffled **per student**. The shuffle is stored on the attempt.
 - `match` is an NMT answer grid (rows 1–4 × letters А–Д, 48 px cells, an ink cross marks the choice) and `order` uses ↑/↓ buttons. Drag-and-drop is not used. Visual rules live in `DESIGN.md`.
-- An `order` question counts as answered once the student moves an item; the shuffled starting order is not an answer.
+- An `order` question counts as answered once the student moves an item or confirms the current order; the shuffled starting order is not an answer until confirmed.
 - «Завершити» on the last question opens the answer sheet, which shows how many questions have no answer; the test is submitted from there. A locked attempt cannot be submitted.
 - The browser never receives correct answers. The server strips them before sending questions.
-- After submitting, the student sees only «Вітаю! Ви завершили тест». The student is never shown a score or correct answers.
+- After submitting, the student sees confirmation («Вітаю! Ви завершили тест», or a clear notice if time ran out or the teacher closed the test). The student is never shown a score or correct answers.
 
 ### Anti-cheat
 

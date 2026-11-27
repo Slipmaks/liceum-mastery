@@ -4,6 +4,7 @@ import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
 import { RANK_LABEL } from "@/lib/staff-labels";
 import { inviteStaff } from "./actions";
@@ -20,17 +21,17 @@ export function InviteForm({ ranks }: { ranks: ("deputy" | "teacher")[] }) {
           <Input id="invite-email" name="email" type="email" required className="w-64" />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="invite-rank">Посада</Label>
-          <select id="invite-rank" name="rank" defaultValue="teacher" className="h-9 rounded-md border border-input bg-background px-2.5 text-sm">
+          <Label htmlFor="invite-rank">Права</Label>
+          <Select id="invite-rank" name="rank" defaultValue="teacher">
             {ranks.map(r => (
               <option key={r} value={r}>
                 {RANK_LABEL[r]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <Button type="submit" disabled={pending}>
-          Створити посилання
+          {pending ? "Створюю…" : "Створити посилання"}
         </Button>
       </form>
       <FormError>{state && "error" in state ? state.error : undefined}</FormError>

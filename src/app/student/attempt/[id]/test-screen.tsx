@@ -1,21 +1,23 @@
 "use client";
 // The test screen: PRODUCT.md › Taking a test, Anti-cheat; visual rules in DESIGN.md.
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Clock, LayoutGrid, Lock, Maximize, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Clock, LayoutGrid, Lock, Maximize, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SheetStrip } from "@/components/sheet-strip";
+import { SheetStrip, type CellState } from "@/components/sheet-strip";
 import { cn } from "@/lib/utils";
 import type { AnswerResponse, StudentQuestion } from "@/lib/questions";
 import type { AttemptState } from "@/lib/attempt";
 import { openAttempt, pollAttempt, saveAnswer, submitAttempt } from "../../actions";
 
 const LETTERS = ["А", "Б", "В", "Г", "Д", "Е", "Є", "Ж"];
+// No motion or press displacement on the exam screen (DESIGN.md › Don't).
+const EXAM_BTN = "transition-none active:translate-y-0";
 // Only what the prompt itself does not say: how to mark the answer.
 const HINT: Partial<Record<StudentQuestion["type"], string>> = {
   many: "Можна позначити кілька варіантів.",
   match: "Позначте одну літеру в кожному рядку.",
-  order: "Розташуйте кнопками ↑ і ↓.",
+  order: "Розташуйте кнопками ↑ і ↓ або підтвердьте поточний порядок.",
 };
 
 // Fullscreen is asked for on desktop only; iPhone Safari has no Fullscreen API (PRODUCT.md › Anti-cheat).
@@ -41,17 +43,29 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
   const [q, setQ] = useState(0);
   const [answers, setAnswers] = useState(initialAnswers);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [locked, setLocked] = useState(initial.status === "locked");
+  const [unlockedNotice, setUnlockedNotice] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   const [fullscreenFailed, setFullscreenFailed] = useState(false);
+  const [submitting, startSubmit] = useTransition();
   const wantsFullscreen = useSyncExternalStore(onFullscreenChange, needsFullscreen, () => false) && !fullscreenFailed && !preview;
   const left = useCountdown(initial.remainingMs, () => !preview && router.refresh());
   const pending = useRef(new Map<number, AnswerResponse | null>());
+  const sheetToggleRef = useRef<HTMLButtonElement | null>(null);
+  const currentSheetBtnRef = useRef<HTMLButtonElement | null>(null);
+  const wasSheetOpen = useRef(false);
 
   const apply = useCallback(
     (s: AttemptState) => {
       if (s.status === "finished") router.refresh();
-      else setLocked(s.status === "locked");
+      else {
+        setLocked(prev => {
+          if (prev && s.status !== "locked") setUnlockedNotice(true);
+          else if (s.status === "locked") setUnlockedNotice(false);
+          return s.status === "locked";
+        });
+      }
     },
     [router],
   );
@@ -70,6 +84,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
     const send = (type: string) => navigator.sendBeacon(`/student/attempt/${attemptId}/event`, type);
     const lock = (type: string) => {
       send(type);
+      setUnlockedNotice(false);
       setLocked(true);
     };
     let wasFullscreen = !!document.fullscreenElement;
@@ -106,6 +121,27 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
     return () => clearInterval(id);
   }, [locked, attemptId, apply]);
 
+  // Focus entry and Escape dismiss for the «Бланк» sheet.
+  useEffect(() => {
+    if (!sheetOpen) {
+      wasSheetOpen.current = false;
+      return;
+    }
+    if (!wasSheetOpen.current) {
+      requestAnimationFrame(() => currentSheetBtnRef.current?.focus());
+    }
+    wasSheetOpen.current = true;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSheetOpen(false);
+        setConfirmSubmit(false);
+        requestAnimationFrame(() => sheetToggleRef.current?.focus());
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheetOpen]);
+
   // Every answer goes to the server at once; failed saves are retried until they land.
   const flush = useCallback(async () => {
     if (preview) return pending.current.clear();
@@ -128,10 +164,35 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
   }, [unsaved, flush]);
 
   const question = questions[q];
-  const answered = questions.map(x => x.id in answers);
+  const states: CellState[] = questions.map(x => {
+    const r = answers[x.id];
+    if (r === undefined) return "empty";
+    if (x.kind === "match") {
+      const count = Object.keys(r as Record<string, string>).length;
+      if (count === 0) return "empty";
+      return count >= x.left.length ? "done" : "partial";
+    }
+    return "done";
+  });
+  const doneCount = states.filter(s => s === "done").length;
+  const partialCount = states.filter(s => s === "partial").length;
+  const incompleteCount = questions.length - doneCount;
   const last = q === questions.length - 1;
+
+  const timerBand = left < 60 ? "critical" : left < 300 ? "warning" : "normal";
+  const liveStatus = locked
+    ? "Тест призупинено. Усі попередні відповіді збережено. Зверніться до вчителя."
+    : timerBand === "critical"
+      ? "Залишилось менше однієї хвилини."
+      : timerBand === "warning"
+        ? "Залишилось менше 5 хвилин."
+        : unlockedNotice
+          ? "Вчитель дозволив продовжити тест."
+          : "";
+
   const set = (r: AnswerResponse | null) => {
     const qid = question.id;
+    setUnlockedNotice(false);
     setAnswers(prev => {
       const next = { ...prev };
       if (r === null) delete next[qid];
@@ -144,18 +205,27 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
   const go = (i: number) => {
     setQ(i);
     setSheetOpen(false);
+    setConfirmSubmit(false);
   };
 
   if (locked) {
     return (
       <Centered>
-        <span className="grid size-14 place-items-center rounded-full bg-danger-soft text-destructive">
-          <Lock className="size-6" aria-hidden />
-        </span>
-        <h1 className="text-2xl font-semibold">Тест призупинено</h1>
-        <p className="max-w-xs text-pretty text-muted-foreground">Зверніться до вчителя, щоб він дозволив продовжити.</p>
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          {liveStatus}
+        </p>
+        <div role="alert" className="grid justify-items-center gap-3">
+          <span className="grid size-14 place-items-center rounded-full bg-danger-soft text-destructive">
+            <Lock className="size-6" aria-hidden />
+          </span>
+          <h1 className="text-2xl font-semibold">Тест призупинено</h1>
+          <p className="max-w-xs text-pretty text-muted-foreground">Зверніться до вчителя, щоб він дозволив продовжити.</p>
+        </div>
         <Timer seconds={left} />
         <p className="text-sm text-muted-foreground">Час тесту не зупиняється.</p>
+        <p className="mt-2 max-w-sm rounded-lg border bg-card px-4 py-3 text-sm text-pretty text-foreground">
+          Усі попередні відповіді збережено. Не оновлюйте сторінку — тест відкриється сам після дозволу вчителя.
+        </p>
       </Centered>
     );
   }
@@ -168,7 +238,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
           Тест відкриється на весь екран. Не виходьте з повноекранного режиму й не перемикайте вкладки: тест буде призупинено.
         </p>
         <Button
-          className="mt-2 h-12 px-6 text-base"
+          className={cn("mt-2 h-12 px-6 text-base", EXAM_BTN)}
           onClick={() => document.documentElement.requestFullscreen().catch(() => setFullscreenFailed(true))}
         >
           <Maximize aria-hidden /> {Object.keys(answers).length ? "Продовжити" : "Розпочати"}
@@ -180,6 +250,9 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-xl flex-col select-none">
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveStatus}
+      </p>
       <header className="border-b px-4 pt-3 pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -192,7 +265,7 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
           </div>
           <Timer seconds={left} />
         </div>
-        <SheetStrip answered={answered} current={q} numbered className="mt-3 gap-1" cellClassName="h-7 w-auto flex-1" />
+        <SheetStrip states={states} current={q} numbered onSelect={go} className="mt-3 gap-1" cellClassName="h-7 min-w-6 flex-1" />
         {preview && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-sm">Попередній перегляд: так тест бачить учень. Відповіді не зберігаються.</p>}
         {unsaved && (
           <p role="alert" className="mt-2 rounded-md bg-muted px-3 py-2 text-sm">
@@ -223,57 +296,115 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
 
       <footer className="border-t bg-background pb-[env(safe-area-inset-bottom)]">
         {sheetOpen && (
-          <div id="sheet" className="border-b px-4 py-4">
-            <p className="text-sm font-medium">Бланк відповідей</p>
-            <div className="mt-3 grid grid-cols-6 gap-2">
-              {questions.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => go(i)}
-                  aria-current={i === q ? "step" : undefined}
-                  aria-label={`Питання ${i + 1}${answered[i] ? ", є відповідь" : ", без відповіді"}`}
-                  className={cn(
-                    "h-12 rounded-md border text-base font-semibold tabular-nums outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                    answered[i] ? "border-primary bg-primary text-primary-foreground" : "border-input bg-sheet",
-                    i === q && "outline-2 outline-offset-2 outline-primary",
-                  )}
-                >
-                  {i + 1}
-                </button>
-              ))}
+          <div id="sheet" className="flex max-h-[55dvh] flex-col border-b">
+            <div className="overflow-y-auto px-4 pt-4 pb-3">
+              <p className="text-sm font-medium">Бланк відповідей</p>
+              <div className="mt-3 grid grid-cols-6 gap-2">
+                {questions.map((_, i) => (
+                  <button
+                    key={i}
+                    ref={i === q ? currentSheetBtnRef : undefined}
+                    type="button"
+                    onClick={() => go(i)}
+                    aria-current={i === q ? "step" : undefined}
+                    aria-label={`Питання ${i + 1}${states[i] === "done" ? ", є відповідь" : states[i] === "partial" ? ", відповідь часткова" : ", без відповіді"}`}
+                    className={cn(
+                      "h-12 rounded-md border text-base font-semibold tabular-nums",
+                      states[i] === "done"
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : states[i] === "partial"
+                          ? "border-primary bg-accent text-accent-foreground"
+                          : "border-input bg-sheet",
+                      i === q ? "outline-2 outline-offset-2 outline-primary" : "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    )}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
             </div>
-            <form action={submitAttempt.bind(null, attemptId)} className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground tabular-nums">Без відповіді: {answered.filter(a => !a).length}</p>
-              <Button type="submit" variant="outline" className="h-11 px-4" disabled={unsaved || preview}>
-                Завершити тест
-              </Button>
-            </form>
+            <div className="border-t px-4 py-3">
+              {confirmSubmit ? (
+                <div className="grid gap-3">
+                  <p className="text-sm text-pretty">
+                    Без повної відповіді: <span className="font-semibold tabular-nums">{incompleteCount}</span>. Після завершення змінити відповіді не можна.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn("h-12 text-base", EXAM_BTN)}
+                      disabled={submitting}
+                      onClick={() => setConfirmSubmit(false)}
+                    >
+                      Повернутися
+                    </Button>
+                    <Button
+                      type="button"
+                      className={cn("h-12 text-base", EXAM_BTN)}
+                      disabled={unsaved || preview || submitting}
+                      onClick={() => startSubmit(() => submitAttempt(attemptId))}
+                    >
+                      {submitting ? "Надсилаю…" : "Завершити тест"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground tabular-nums">
+                    Без відповіді: {incompleteCount}
+                    {partialCount > 0 && ` (частково: ${partialCount})`}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn("h-12 px-5 text-base", EXAM_BTN)}
+                    disabled={unsaved || preview || submitting}
+                    onClick={() => {
+                      if (incompleteCount > 0) setConfirmSubmit(true);
+                      else startSubmit(() => submitAttempt(attemptId));
+                    }}
+                  >
+                    {submitting ? "Надсилаю…" : "Завершити тест"}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
         <div className="grid grid-cols-[1fr_auto_1fr] gap-2 px-4 py-3">
-          <Button variant="outline" className="h-12 text-base" disabled={q === 0} onClick={() => go(q - 1)}>
+          <Button variant="outline" className={cn("h-12 text-base", EXAM_BTN)} disabled={q === 0} onClick={() => go(q - 1)}>
             <ArrowLeft aria-hidden /> Назад
           </Button>
           <Button
+            ref={sheetToggleRef}
             variant="secondary"
-            className="h-12 px-4 text-base tabular-nums"
+            className={cn("h-12 px-4 text-base tabular-nums", EXAM_BTN)}
             aria-expanded={sheetOpen}
             aria-controls="sheet"
-            onClick={() => setSheetOpen(o => !o)}
+            onClick={() => {
+              setConfirmSubmit(false);
+              setSheetOpen(o => !o);
+            }}
           >
             <LayoutGrid aria-hidden /> Бланк
             <span className="text-muted-foreground">
-              {answered.filter(Boolean).length}/{questions.length}
+              {doneCount}/{questions.length}
             </span>
           </Button>
           {last ? (
             // Opens the answer sheet: submitting is a second, deliberate step there.
-            <Button className="h-12 text-base" onClick={() => setSheetOpen(true)}>
+            <Button
+              className={cn("h-12 text-base", EXAM_BTN)}
+              onClick={() => {
+                setConfirmSubmit(false);
+                setSheetOpen(true);
+              }}
+            >
               Завершити
             </Button>
           ) : (
-            <Button className="h-12 text-base" onClick={() => go(q + 1)}>
+            <Button className={cn("h-12 text-base", EXAM_BTN)} onClick={() => go(q + 1)}>
               Далі <ArrowRight aria-hidden />
             </Button>
           )}
@@ -374,8 +505,18 @@ function Match({
 }: {
   question: Extract<StudentQuestion, { kind: "match" }>;
   value: Record<string, string>;
-  onChange: (v: Record<string, string>) => void;
+  onChange: (v: Record<string, string> | null) => void;
 }) {
+  const pairedCount = question.left.filter(l => value[l.id]).length;
+  const counts = new Map<string, number>();
+  for (const l of question.left) {
+    const rid = value[l.id];
+    if (rid) counts.set(rid, (counts.get(rid) ?? 0) + 1);
+  }
+  const dupLetters = question.right
+    .map((r, j) => ((counts.get(r.id) ?? 0) > 1 ? LETTERS[j] : null))
+    .filter((x): x is string => x !== null);
+
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-x-4 gap-y-3 text-base sm:grid-cols-2">
@@ -397,46 +538,68 @@ function Match({
         </ul>
       </div>
 
-      <table className="w-fit border-collapse">
-        <caption className="sr-only">Бланк відповідності</caption>
-        <thead>
-          <tr>
-            <td />
-            {question.right.map((r, j) => (
-              <th key={r.id} scope="col" className="pb-1.5 text-sm font-semibold">
-                {LETTERS[j]}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {question.left.map((l, i) => (
-            <tr key={l.id}>
-              <th scope="row" className="pr-2 text-sm font-semibold tabular-nums">
-                {i + 1}
-              </th>
-              {question.right.map((r, j) => (
-                <td key={r.id} className="border border-input p-0">
-                  <label className="block cursor-pointer">
-                    <input
-                      type="radio"
-                      name={`m${question.id}-${l.id}`}
-                      className="peer sr-only"
-                      aria-label={`${i + 1} — ${LETTERS[j]}`}
-                      checked={value[l.id] === r.id}
-                      onChange={() => onChange({ ...value, [l.id]: r.id })}
-                    />
-                    {/* The NMT mark: an ink cross inside the printed cell. */}
-                    <span className="grid size-12 place-items-center bg-sheet text-primary peer-checked:bg-accent peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-focus-visible:ring-inset peer-checked:[&>svg]:block">
-                      <X className="hidden size-7" strokeWidth={2.75} aria-hidden />
-                    </span>
-                  </label>
-                </td>
+      <div className="grid gap-2">
+        <div className="grid gap-1">
+          <p className="text-sm text-muted-foreground tabular-nums">
+            Позначено {pairedCount} з {question.left.length}
+          </p>
+          {dupLetters.length > 0 && (
+            <p className="text-sm text-foreground">
+              Літеру {dupLetters.join(", ")} обрано в кількох рядках — перевірте відповідність.
+            </p>
+          )}
+        </div>
+
+        <div className="overflow-x-auto pb-1">
+          <table className="w-fit border-collapse">
+            <caption className="sr-only">Бланк відповідності</caption>
+            <thead>
+              <tr>
+                <td />
+                {question.right.map((r, j) => (
+                  <th key={r.id} scope="col" className="pb-1.5 text-sm font-semibold">
+                    {LETTERS[j]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {question.left.map((l, i) => (
+                <tr key={l.id}>
+                  <th scope="row" className="pr-2 text-sm font-semibold tabular-nums">
+                    {i + 1}
+                  </th>
+                  {question.right.map((r, j) => (
+                    <td key={r.id} className="border border-input p-0">
+                      <label className="block cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`m${question.id}-${l.id}`}
+                          className="peer sr-only"
+                          aria-label={`Рядок ${i + 1} (${l.text}) — варіант ${LETTERS[j]} (${r.text})`}
+                          checked={value[l.id] === r.id}
+                          onClick={() => {
+                            if (value[l.id] === r.id) {
+                              const next = { ...value };
+                              delete next[l.id];
+                              onChange(Object.keys(next).length ? next : null);
+                            }
+                          }}
+                          onChange={() => onChange({ ...value, [l.id]: r.id })}
+                        />
+                        {/* The NMT mark: an ink cross inside the printed cell. */}
+                        <span className="grid size-12 place-items-center bg-sheet text-primary peer-checked:bg-accent peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-focus-visible:ring-inset peer-checked:[&>svg]:block">
+                          <X className="hidden size-7" strokeWidth={2.75} aria-hidden />
+                        </span>
+                      </label>
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -453,33 +616,59 @@ function Order({
   onChange: (v: string[]) => void;
 }) {
   const text = new Map(question.items.map(i => [i.id, i.text]));
+  const btnRefs = useRef(new Map<string, HTMLButtonElement | null>());
   const move = (from: number, to: number) => {
+    const id = value[from];
     const next = [...value];
     [next[from], next[to]] = [next[to], next[from]];
     onChange(next);
+    if (to === 0) requestAnimationFrame(() => btnRefs.current.get(`${id}:down`)?.focus());
+    else if (to === next.length - 1) requestAnimationFrame(() => btnRefs.current.get(`${id}:up`)?.focus());
   };
   return (
-    <ol className="flex flex-col gap-2">
-      {value.map((id, pos) => (
-        <li key={id} className="flex min-h-14 items-center gap-3 rounded-lg border bg-card py-1.5 pr-1.5 pl-3">
-          <span className={cn(mark, "size-8 text-sm", touched && "border-primary bg-primary text-primary-foreground")}>{pos + 1}</span>
-          <span className="flex-1 text-base leading-snug">{text.get(id)}</span>
-          <Button variant="ghost" size="icon-lg" className="size-11" disabled={pos === 0} aria-label={`«${text.get(id)}» вище`} onClick={() => move(pos, pos - 1)}>
-            <ArrowUp aria-hidden />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            className="size-11"
-            disabled={pos === value.length - 1}
-            aria-label={`«${text.get(id)}» нижче`}
-            onClick={() => move(pos, pos + 1)}
-          >
-            <ArrowDown aria-hidden />
-          </Button>
-        </li>
-      ))}
-    </ol>
+    <div>
+      <ol className="flex flex-col gap-2">
+        {value.map((id, pos) => (
+          <li key={id} className="flex min-h-14 items-center gap-3 rounded-lg border bg-card py-1.5 pr-1.5 pl-3">
+            <span className={cn(mark, "size-8 text-sm", touched && "border-primary bg-primary text-primary-foreground")}>{pos + 1}</span>
+            <span className="flex-1 text-base leading-snug">{text.get(id)}</span>
+            <Button
+              ref={el => {
+                if (el) btnRefs.current.set(`${id}:up`, el);
+                else btnRefs.current.delete(`${id}:up`);
+              }}
+              variant="ghost"
+              size="icon-lg"
+              className={cn("size-11", EXAM_BTN)}
+              disabled={pos === 0}
+              aria-label={`«${text.get(id)}» вище`}
+              onClick={() => move(pos, pos - 1)}
+            >
+              <ArrowUp aria-hidden />
+            </Button>
+            <Button
+              ref={el => {
+                if (el) btnRefs.current.set(`${id}:down`, el);
+                else btnRefs.current.delete(`${id}:down`);
+              }}
+              variant="ghost"
+              size="icon-lg"
+              className={cn("size-11", EXAM_BTN)}
+              disabled={pos === value.length - 1}
+              aria-label={`«${text.get(id)}» нижче`}
+              onClick={() => move(pos, pos + 1)}
+            >
+              <ArrowDown aria-hidden />
+            </Button>
+          </li>
+        ))}
+      </ol>
+      {!touched && (
+        <Button type="button" variant="outline" className={cn("mt-3 h-12 w-full text-base", EXAM_BTN)} onClick={() => onChange(value)}>
+          <Check aria-hidden /> Підтвердити поточний порядок
+        </Button>
+      )}
+    </div>
   );
 }
 

@@ -1,31 +1,30 @@
 // Classes: admins see and create all of them; a homeroom teacher sees their own.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { classes, students, users } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { isAdmin, schoolTeachers } from "@/lib/staff";
-import { Button } from "@/components/ui/button";
-import { FormError } from "@/components/form-error";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { createClass } from "./actions";
-import { ClassFields } from "./class-fields";
+import { CreateClassForm } from "./class-forms";
+
+export const metadata: Metadata = { title: "Класи" };
 
 const collator = new Intl.Collator("uk", { numeric: true });
 
-export default function ClassesPage({ searchParams }: PageProps<"/dashboard/classes">) {
+export default function ClassesPage() {
   return (
     <Suspense>
-      <Classes searchParams={searchParams} />
+      <Classes />
     </Suspense>
   );
 }
 
-async function Classes({ searchParams }: Pick<PageProps<"/dashboard/classes">, "searchParams">) {
+async function Classes() {
   const me = await requireStaff();
   const admin = isAdmin(me);
-  const sp = await searchParams;
   const rows = await db
     .select({
       id: classes.id,
@@ -78,13 +77,7 @@ async function Classes({ searchParams }: Pick<PageProps<"/dashboard/classes">, "
       {admin && (
         <section className="grid max-w-xl gap-3 rounded-lg border bg-card p-4">
           <h2 className="font-semibold">Новий клас</h2>
-          <form action={createClass} className="grid gap-3">
-            <ClassFields teachers={await schoolTeachers(me.schoolId)} />
-            <FormError>{sp.error ? "Клас з такою назвою вже є, або назва порожня." : undefined}</FormError>
-            <Button type="submit" className="w-fit">
-              Створити клас
-            </Button>
-          </form>
+          <CreateClassForm teachers={await schoolTeachers(me.schoolId)} />
           <p className="text-sm text-muted-foreground">Код для входу учнів створиться автоматично. Список учнів додасте на сторінці класу.</p>
         </section>
       )}

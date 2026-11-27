@@ -1,7 +1,8 @@
 // School administration for the director and deputies: staff, invites, subjects.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
 import { db } from "@/db";
 import { invites, materials, subjects, tests, users } from "@/db/schema";
@@ -10,15 +11,17 @@ import { assignableRanks, isAdmin, outranks } from "@/lib/staff";
 import { RANK_LABEL } from "@/lib/staff-labels";
 import { dayTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ConfirmForm } from "@/components/confirm-form";
+import { SubmitButton } from "@/components/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { addSubject, archiveStaff, deleteSubject, revokeInvite, updateStaff } from "./actions";
+import { archiveStaff, deleteSubject, restoreStaff, revokeInvite } from "./actions";
 import { InviteForm } from "./invite-form";
+import { AddSubjectForm, UpdateStaffForm } from "./school-forms";
+
+export const metadata: Metadata = { title: "Школа" };
 
 const collator = new Intl.Collator("uk");
 const ORDER = { director: 0, deputy: 1, teacher: 2 };
-const select = "h-9 rounded-md border border-input bg-background px-2.5 text-sm";
 
 export default function SchoolPage() {
   return (
@@ -31,11 +34,15 @@ export default function SchoolPage() {
 async function School() {
   const me = await requireStaff();
   if (!isAdmin(me)) redirect("/dashboard");
-  const [staff, pending, subjectRows] = await db.batch([
+  const [staff, archivedStaff, pending, subjectRows] = await db.batch([
     db
       .select({ id: users.id, name: users.name, email: users.email, rank: users.rank, title: users.title })
       .from(users)
       .where(and(eq(users.schoolId, me.schoolId), isNull(users.archivedAt))),
+    db
+      .select({ id: users.id, name: users.name, email: users.email, rank: users.rank })
+      .from(users)
+      .where(and(eq(users.schoolId, me.schoolId), isNotNull(users.archivedAt))),
     db
       .select({ tokenHash: invites.tokenHash, email: invites.email, rank: invites.rank, expiresAt: invites.expiresAt })
       .from(invites)
@@ -50,6 +57,7 @@ async function School() {
       .where(eq(subjects.schoolId, me.schoolId)),
   ]);
   staff.sort((a, b) => ORDER[a.rank] - ORDER[b.rank] || collator.compare(a.name, b.name));
+  archivedStaff.sort((a, b) => collator.compare(a.name, b.name));
   subjectRows.sort((a, b) => collator.compare(a.name, b.name));
   const ranks = assignableRanks(me);
 
@@ -83,22 +91,14 @@ async function School() {
                       <details className="text-left">
                         <summary className="cursor-pointer text-right text-sm underline-offset-4 hover:underline">Змінити</summary>
                         <div className="mt-2 grid w-72 gap-2">
-                          <form action={updateStaff} className="grid gap-2">
-                            <input type="hidden" name="user" value={u.id} />
-                            <Input name="name" required defaultValue={u.name} aria-label="Ім’я" />
-                            <Input name="title" defaultValue={u.title ?? ""} placeholder="Посада, напр. Учителька історії" aria-label="Посада" />
-                            <select name="rank" defaultValue={u.rank} aria-label="Права" className={select}>
-                              {ranks.map(r => (
-                                <option key={r} value={r}>
-                                  {RANK_LABEL[r]}
-                                </option>
-                              ))}
-                            </select>
-                            <Button type="submit" variant="outline" size="sm" className="w-fit">
-                              Зберегти
-                            </Button>
-                          </form>
-                          <ConfirmForm action={archiveStaff} message={`Звільнити ${u.name}? Вхід буде закрито, а тести й результати залишаться.`}>
+                          <UpdateStaffForm userId={u.id} ranks={ranks} initial={{ name: u.name, title: u.title ?? "", rank: u.rank }} />
+                          <ConfirmForm
+                            action={archiveStaff}
+                            title="Архівувати працівника?"
+                            message={`Звільнити ${u.name}? Вхід буде закрито, класне керівництво знято, а тести й результати залишаться.`}
+                            confirmLabel="Звільнити"
+                            pendingLabel="Архівую…"
+                          >
                             <input type="hidden" name="user" value={u.id} />
                             <Button type="submit" variant="ghost" size="sm">
                               Звільнити
@@ -113,6 +113,29 @@ async function School() {
             </TableBody>
           </Table>
         </div>
+
+        {archivedStaff.length > 0 && (
+          <details className="max-w-xl">
+            <summary className="cursor-pointer text-sm font-medium tabular-nums">Архів працівників · {archivedStaff.length}</summary>
+            <ul className="mt-2 grid text-sm">
+              {archivedStaff.map(u => (
+                <li key={u.id} className="flex items-center justify-between gap-4 border-b py-1.5">
+                  <span>
+                    {u.name} <span className="text-muted-foreground">· {u.email} · {RANK_LABEL[u.rank]}</span>
+                  </span>
+                  {outranks(me, u.rank) && (
+                    <form action={restoreStaff}>
+                      <input type="hidden" name="user" value={u.id} />
+                      <SubmitButton variant="ghost" size="sm" pendingLabel="Повертаю…">
+                        Повернути
+                      </SubmitButton>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </section>
 
       <section className="grid gap-3">
@@ -124,13 +147,13 @@ async function School() {
             {pending.map(i => (
               <li key={i.tokenHash} className="flex items-center justify-between gap-4 border-b py-1.5">
                 <span>
-                  {i.email} · {RANK_LABEL[i.rank]} <span className="text-muted-foreground">· діє до {dayTime(i.expiresAt)}</span>
+                  {i.email} · {RANK_LABEL[i.rank]} <span className="text-muted-foreground tabular-nums">· діє до {dayTime(i.expiresAt)}</span>
                 </span>
                 <form action={revokeInvite}>
                   <input type="hidden" name="invite" value={i.tokenHash} />
-                  <Button type="submit" variant="ghost" size="sm">
+                  <SubmitButton variant="ghost" size="sm" pendingLabel="Скасовую…">
                     Скасувати
-                  </Button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}
@@ -145,22 +168,23 @@ async function School() {
             <li key={s.id} className="flex min-h-9 items-center justify-between gap-2 border-b">
               {s.name}
               {!s.used && (
-                <form action={deleteSubject}>
+                <ConfirmForm
+                  action={deleteSubject}
+                  title="Видалити предмет?"
+                  message={`Видалити предмет «${s.name}»?`}
+                  confirmLabel="Видалити"
+                  pendingLabel="Видаляю…"
+                >
                   <input type="hidden" name="subject" value={s.id} />
                   <Button type="submit" variant="ghost" size="icon-sm" aria-label={`Видалити предмет «${s.name}»`}>
                     <Trash2 aria-hidden />
                   </Button>
-                </form>
+                </ConfirmForm>
               )}
             </li>
           ))}
         </ul>
-        <form action={addSubject} className="flex gap-2">
-          <Input name="name" required maxLength={100} placeholder="Новий предмет" className="w-64" aria-label="Новий предмет" />
-          <Button type="submit" variant="outline">
-            Додати
-          </Button>
-        </form>
+        <AddSubjectForm />
         <p className="text-sm text-muted-foreground">Предмет, який уже використано в тестах або матеріалах, видалити не можна.</p>
       </section>
     </div>

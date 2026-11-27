@@ -1,13 +1,16 @@
 // Student home: tests opened to this student right now. A test is invisible until the teacher opens it.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { assignments, attempts, classes, retakeGrants, subjects, tests } from "@/db/schema";
 import { requireStudent } from "@/lib/auth";
 import { finalizeDue, visibleTo } from "@/lib/attempt";
-import { Button } from "@/components/ui/button";
 import { LogoutButton } from "@/components/logout-button";
+import { SubmitButton } from "@/components/submit-button";
 import { startAttempt } from "./actions";
+
+export const metadata: Metadata = { title: "Мої тести" };
 
 export default function StudentHome() {
   return (
@@ -54,7 +57,7 @@ async function Home() {
           <p className="text-sm text-muted-foreground">{cls.name}</p>
           <h1 className="text-2xl font-semibold">{me.name}</h1>
         </div>
-        <LogoutButton />
+        <LogoutButton className="h-12 px-3 text-base" />
       </header>
 
       {open.length === 0 ? (
@@ -76,12 +79,15 @@ async function Home() {
                 {done ? (
                   <p className="w-fit rounded-sm bg-success-soft px-2 py-1 text-xs font-medium text-success">Здано</p>
                 ) : (
-                  <form action={startAttempt}>
-                    <input type="hidden" name="assignment" value={a.id} />
-                    <Button type="submit" className="h-12 w-full text-base">
-                      {resume ? "Продовжити" : tries.length ? "Почати повторно" : "Почати"}
-                    </Button>
-                  </form>
+                  <div className="grid gap-2.5">
+                    <p className="text-sm text-muted-foreground">Таймер не зупиняється · не перемикайте вкладки й програми під час тесту.</p>
+                    <form action={startAttempt}>
+                      <input type="hidden" name="assignment" value={a.id} />
+                      <SubmitButton className="h-12 w-full text-base" pendingLabel="Відкриваю тест…">
+                        {resume ? "Продовжити" : tries.length ? "Почати повторно" : "Почати"}
+                      </SubmitButton>
+                    </form>
+                  </div>
                 )}
               </li>
             );

@@ -22,7 +22,8 @@ export const EVENT_LABEL: Record<AttemptEventType, string> = {
   unlock: "Розблоковано вчителем",
 };
 
-export type AttemptState = { status: "in_progress" | "locked" | "finished"; remainingMs: number };
+export type FinishReason = "submitted" | "timeout" | "closed";
+export type AttemptState = { status: "in_progress" | "locked" | "finished"; remainingMs: number; finishReason?: FinishReason };
 
 /**
  * Assignments of the student's school that this student may see: open ones for the whole class or listing them by name,
@@ -92,10 +93,25 @@ export async function submit(attemptId: number, studentId: number) {
 export async function attemptState(attemptId: number, studentId: number): Promise<AttemptState | null> {
   await finalizeDue(eq(attempts.id, attemptId));
   const [a] = await db
-    .select({ status: attempts.status, remainingMs: sql<string>`greatest(0, extract(epoch from ${attempts.deadlineAt} - now()) * 1000)` })
+    .select({
+      status: attempts.status,
+      remainingMs: sql<string>`greatest(0, extract(epoch from ${attempts.deadlineAt} - now()) * 1000)`,
+      startedAt: attempts.startedAt,
+      deadlineAt: attempts.deadlineAt,
+      finishedAt: attempts.finishedAt,
+      closedAt: assignments.closedAt,
+    })
     .from(attempts)
+    .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
     .where(and(eq(attempts.id, attemptId), eq(attempts.studentId, studentId)));
-  return a ? { status: a.status, remainingMs: Number(a.remainingMs) } : null;
+  if (!a) return null;
+  let finishReason: FinishReason | undefined;
+  if (a.status === "finished") {
+    if (a.finishedAt && a.finishedAt >= a.deadlineAt) finishReason = "timeout";
+    else if (a.finishedAt && a.closedAt && a.startedAt < a.closedAt && a.finishedAt >= a.closedAt) finishReason = "closed";
+    else finishReason = "submitted";
+  }
+  return { status: a.status, remainingMs: Number(a.remainingMs), finishReason };
 }
 
 /** Logs an event on an unfinished attempt and flags it; a locking event also locks it. The flag is never cleared. */

@@ -1,6 +1,7 @@
 // Staff shell: a 240px sidebar from lg up (DESIGN.md › Layout). The session is read inside Suspense, not at the top.
 import { Suspense } from "react";
 import { eq } from "drizzle-orm";
+import { User } from "lucide-react";
 import { db } from "@/db";
 import { classes, schools } from "@/db/schema";
 import Link from "next/link";
@@ -16,7 +17,7 @@ export default function StaffLayout({ children }: LayoutProps<"/dashboard">) {
         <div className="px-5 pt-5 pb-6">
           <p className="font-semibold text-sidebar-accent-foreground">Liceum Mastery</p>
           <Suspense>
-            <School />
+            <School className="text-sm text-muted-foreground" />
           </Suspense>
         </div>
         <Suspense fallback={<Nav />}>
@@ -29,12 +30,27 @@ export default function StaffLayout({ children }: LayoutProps<"/dashboard">) {
         </div>
       </aside>
       <div className="min-w-0 flex-1">
-        {/* Below lg the sidebar is hidden; the same sections sit in a top bar. */}
-        <header className="flex items-center justify-between gap-2 border-b bg-sidebar px-2 py-1.5 lg:hidden">
-          <Suspense fallback={<Nav className="flex-row flex-wrap px-0" />}>
-            <StaffNav className="flex-row flex-wrap px-0" />
-          </Suspense>
-          <LogoutButton />
+        {/* Below lg the sidebar is hidden; show school, profile link, logout, and section tabs. */}
+        <header className="border-b bg-sidebar lg:hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-sidebar-border px-3 py-2">
+            <div className="min-w-0">
+              <p className="font-semibold leading-tight text-sidebar-accent-foreground">Liceum Mastery</p>
+              <Suspense>
+                <School className="truncate text-xs text-muted-foreground" />
+              </Suspense>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Suspense>
+                <MobileMe />
+              </Suspense>
+              <LogoutButton />
+            </div>
+          </div>
+          <div className="px-1 py-1.5">
+            <Suspense fallback={<Nav className="flex-row flex-wrap px-0" />}>
+              <StaffNav className="flex-row flex-wrap px-0" />
+            </Suspense>
+          </div>
         </header>
         <main className="px-4 py-6 lg:px-8">{children}</main>
       </div>
@@ -42,10 +58,10 @@ export default function StaffLayout({ children }: LayoutProps<"/dashboard">) {
   );
 }
 
-async function School() {
+async function School({ className }: { className?: string }) {
   const me = await requireStaff();
   const [s] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, me.schoolId));
-  return <p className="text-sm text-muted-foreground">{s.name}</p>;
+  return <p className={className}>{s.name}</p>;
 }
 
 async function StaffNav({ className }: { className?: string }) {
@@ -53,6 +69,19 @@ async function StaffNav({ className }: { className?: string }) {
   const [homeroom] = isAdmin(me) ? [] : await db.select({ id: classes.id }).from(classes).where(eq(classes.homeroomTeacherId, me.id)).limit(1);
   const sections: Section[] = isAdmin(me) ? ["classes", "school"] : homeroom ? ["classes"] : [];
   return <Nav className={className} sections={sections} />;
+}
+
+async function MobileMe() {
+  await requireStaff();
+  return (
+    <Link
+      href="/dashboard/profile"
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-sidebar-accent-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-sidebar-ring/60"
+    >
+      <User className="size-4" aria-hidden />
+      <span>Профіль</span>
+    </Link>
+  );
 }
 
 async function Me() {

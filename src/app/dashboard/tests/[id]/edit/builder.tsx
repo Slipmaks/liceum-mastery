@@ -6,6 +6,8 @@ import { ArrowDown, ArrowUp, Eye, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/confirm-form";
 import { cn } from "@/lib/utils";
 import { blankQuestion, MAX_ITEMS, nextId, problems, TYPE_LABEL, type Draft, type DraftQuestion, type Item, type QType } from "@/lib/draft";
 import { saveDraft } from "../../../actions";
@@ -13,7 +15,6 @@ import { saveDraft } from "../../../actions";
 const LETTERS = ["А", "Б", "В", "Г", "Д", "Е", "Є", "Ж"];
 const GRADES = Array.from({ length: 11 }, (_, i) => i + 1);
 const SAVE = { saved: "Збережено", dirty: "Є незбережені зміни", saving: "Зберігаю…", error: "Не вдалося зберегти. Спробую ще раз." };
-const select = "h-9 rounded-md border border-input bg-background px-2.5 text-sm";
 
 type Q = DraftQuestion & { key: number };
 let keySeq = 0;
@@ -29,6 +30,7 @@ export function Builder({ testId, subjects, initial }: { testId: number; subject
   const [meta, setMeta] = useState(initialMeta);
   const [qs, setQs] = useState(() => initialQuestions.map(withKey));
   const [save, setSave] = useState<keyof typeof SAVE>("saved");
+  const [deletingKey, setDeletingKey] = useState<number | null>(null);
   const version = useRef(0);
 
   const draft: Draft = { ...meta, questions: qs.map(q => ({ type: q.type, prompt: q.prompt, points: q.points, data: q.data })) };
@@ -104,24 +106,24 @@ export function Builder({ testId, subjects, initial }: { testId: number; subject
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="subject">Предмет</Label>
-          <select id="subject" className={select} value={meta.subjectId} onChange={e => editMeta({ subjectId: Number(e.target.value) })}>
+          <Select id="subject" value={meta.subjectId} onChange={e => editMeta({ subjectId: Number(e.target.value) })}>
             {subjects.map(s => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-1.5">
             <Label htmlFor="grade">Клас</Label>
-            <select id="grade" className={select} value={meta.grade} onChange={e => editMeta({ grade: Number(e.target.value) })}>
+            <Select id="grade" value={meta.grade} onChange={e => editMeta({ grade: Number(e.target.value) })}>
               {GRADES.map(g => (
                 <option key={g} value={g}>
                   {g}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="minutes">Час, хв</Label>
@@ -172,9 +174,7 @@ export function Builder({ testId, subjects, initial }: { testId: number; subject
                   variant="ghost"
                   size="icon-sm"
                   aria-label={`Видалити питання ${i + 1}`}
-                  onClick={() => {
-                    if (confirm(`Видалити питання ${i + 1}?`)) editQs(l => l.filter(x => x.key !== q.key));
-                  }}
+                  onClick={() => setDeletingKey(q.key)}
                 >
                   <Trash2 aria-hidden />
                 </Button>
@@ -219,6 +219,19 @@ export function Builder({ testId, subjects, initial }: { testId: number; subject
           </>
         )}
       </section>
+
+      <ConfirmDialog
+        open={deletingKey !== null}
+        onOpenChange={open => {
+          if (!open) setDeletingKey(null);
+        }}
+        title="Видалити питання?"
+        message={`Видалити питання ${deletingKey !== null ? qs.findIndex(x => x.key === deletingKey) + 1 : ""}?`}
+        confirmLabel="Видалити питання"
+        onConfirm={() => {
+          if (deletingKey !== null) editQs(l => l.filter(x => x.key !== deletingKey));
+        }}
+      />
     </div>
   );
 }
@@ -269,11 +282,11 @@ function QuestionBody({ q, n, onChange }: { q: Q; n: number; onChange: (fn: (q: 
             <div key={l.id} className="flex items-center gap-2">
               <span className="w-5 shrink-0 text-sm font-semibold tabular-nums">{j + 1}</span>
               <ItemInput label={`Питання ${n}, рядок ${j + 1}`} item={l} onChange={text => set({ ...d, left: d.left.map(x => (x.id === l.id ? { ...x, text } : x)) })} />
-              <select
+              <Select
                 aria-label={`Правильна літера для рядка ${j + 1}`}
                 value={d.pairs[l.id] ?? ""}
                 onChange={e => set({ ...d, pairs: { ...d.pairs, [l.id]: e.target.value } })}
-                className={cn(select, "w-16 shrink-0")}
+                className="w-16 shrink-0"
               >
                 <option value="" disabled>
                   —
@@ -283,7 +296,7 @@ function QuestionBody({ q, n, onChange }: { q: Q; n: number; onChange: (fn: (q: 
                     {LETTERS[k]}
                   </option>
                 ))}
-              </select>
+              </Select>
               <RemoveButton
                 label={`Видалити рядок ${j + 1}`}
                 disabled={d.left.length <= 2}

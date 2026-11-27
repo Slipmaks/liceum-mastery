@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SheetStrip } from "@/components/sheet-strip";
 import { ConfirmForm } from "@/components/confirm-form";
+import { SubmitButton } from "@/components/submit-button";
 import { cn } from "@/lib/utils";
 import { closeAssignment, unlockAttempt } from "../../actions";
 
@@ -27,7 +28,7 @@ export type MonitorRow = {
 };
 
 const STATUS: Record<Status, { label: string; className: string }> = {
-  locked: { label: "Заблоковано", className: "bg-destructive text-white" },
+  locked: { label: "Заблоковано", className: "bg-destructive text-destructive-foreground" },
   writing: { label: "Пише", className: "border-input bg-transparent text-foreground" },
   done: { label: "Здав", className: "bg-success-soft text-success" },
   idle: { label: "Не почав", className: "bg-transparent text-muted-foreground" },
@@ -56,6 +57,12 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
   const rank = (s: MonitorRow) => (s.status === "locked" ? 0 : s.flagged ? 1 : 2);
   const rows = students.filter(active.test).toSorted((a, b) => rank(a) - rank(b) || a.n - b.n);
   const total = students[0]?.answered.length ?? 0;
+  const writingCount = students.filter(s => s.status === "writing").length;
+  const lockedCount = students.filter(s => s.status === "locked").length;
+  const closeMessage =
+    writingCount + lockedCount > 0
+      ? `Зараз пишуть ${writingCount}, заблоковано ${lockedCount}. Усі незавершені роботи буде здано в поточному стані.`
+      : "Усі незавершені роботи буде здано в поточному стані.";
 
   return (
     <div>
@@ -73,7 +80,13 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
         <div className="flex items-center gap-3">
           <p className="text-right text-sm text-muted-foreground tabular-nums">оновлено о {props.updated}</p>
           {props.canClose && (
-            <ConfirmForm action={closeAssignment} message="Закрити тест? Усі незавершені роботи буде здано в поточному стані.">
+            <ConfirmForm
+              action={closeAssignment}
+              title="Закрити тест для класу?"
+              message={closeMessage}
+              confirmLabel="Закрити тест"
+              pendingLabel="Закриваю…"
+            >
               <input type="hidden" name="assignment" value={assignmentId} />
               <Button type="submit" variant="outline">
                 Закрити тест
@@ -167,10 +180,10 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
                     {s.status === "locked" && s.attemptId && (
                       <form action={unlockAttempt}>
                         <input type="hidden" name="attempt" value={s.attemptId} />
-                        <Button type="submit" size="sm">
+                        <SubmitButton size="sm" pendingLabel="Розблоковую…">
                           <LockOpen aria-hidden />
                           Дозволити продовжити
-                        </Button>
+                        </SubmitButton>
                       </form>
                     )}
                   </TableCell>

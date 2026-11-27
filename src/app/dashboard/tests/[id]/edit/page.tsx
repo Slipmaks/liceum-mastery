@@ -1,5 +1,6 @@
 // The builder: only the author's own draft. A locked test is read-only; its page offers a copy instead.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -7,6 +8,8 @@ import { questions, tests } from "@/db/schema";
 import { schoolSubjects } from "@/lib/staff";
 import { requireStaff } from "@/lib/auth";
 import { Builder } from "./builder";
+
+export const metadata: Metadata = { title: "Редактор тесту" };
 
 export default function EditPage({ params }: PageProps<"/dashboard/tests/[id]/edit">) {
   return (

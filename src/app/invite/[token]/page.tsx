@@ -1,5 +1,6 @@
 // The invite link a director or deputy sends by hand. Public: the token in the URL is the credential.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createHash } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
@@ -7,6 +8,8 @@ import { db } from "@/db";
 import { invites, schools } from "@/db/schema";
 import { RANK_LABEL } from "@/lib/staff-labels";
 import { AcceptForm } from "./accept-form";
+
+export const metadata: Metadata = { title: "Запрошення" };
 
 export default function InvitePage({ params }: PageProps<"/invite/[token]">) {
   return (

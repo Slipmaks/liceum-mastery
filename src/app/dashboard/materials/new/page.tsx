@@ -1,7 +1,10 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { schoolSubjects } from "@/lib/staff";
 import { MaterialForm } from "../material-form";
+
+export const metadata: Metadata = { title: "Новий матеріал" };
 
 export default function NewMaterialPage() {
   return (

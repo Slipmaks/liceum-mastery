@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -6,6 +7,8 @@ import { materials } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { editableMaterials, schoolSubjects } from "@/lib/staff";
 import { MaterialForm } from "../../material-form";
+
+export const metadata: Metadata = { title: "Редагувати матеріал" };
 
 export default function EditMaterialPage({ params }: PageProps<"/dashboard/materials/[id]/edit">) {
   return (

@@ -1,5 +1,6 @@
 // Materials bank: every teacher and admin of the school sees all of it; filters on every field, search by title.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 import { and, asc, desc, eq, ilike, ne } from "drizzle-orm";
@@ -10,12 +11,14 @@ import { requireStaff } from "@/lib/auth";
 import { isAdmin, schoolSubjects } from "@/lib/staff";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { ConfirmForm } from "@/components/confirm-form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deleteMaterial } from "./actions";
 import { MATERIAL_TYPES, TYPE_LABEL, type MaterialType } from "./types";
 
-const select = "h-9 rounded-md border border-input bg-background px-2.5 text-sm";
+export const metadata: Metadata = { title: "Матеріали" };
+
 const collator = new Intl.Collator("uk");
 
 export default function MaterialsPage({ searchParams }: PageProps<"/dashboard/materials">) {
@@ -128,7 +131,7 @@ async function Materials({ searchParams }: Pick<PageProps<"/dashboard/materials"
                   <TableCell className="font-medium">
                     <a href={m.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline-offset-4 hover:underline">
                       {m.title}
-                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-label="(відкриється в новій вкладці)" />
+                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" role="img" aria-label="(відкриється в новій вкладці)" />
                     </a>
                   </TableCell>
                   <TableCell>{TYPE_LABEL[m.type]}</TableCell>
@@ -144,7 +147,13 @@ async function Materials({ searchParams }: Pick<PageProps<"/dashboard/materials"
                             <Pencil aria-hidden />
                           </Link>
                         </Button>
-                        <ConfirmForm action={deleteMaterial} message={`Видалити «${m.title}»?`}>
+                        <ConfirmForm
+                          action={deleteMaterial}
+                          title="Видалити матеріал?"
+                          message={`Видалити «${m.title}»?`}
+                          confirmLabel="Видалити"
+                          pendingLabel="Видаляю…"
+                        >
                           <input type="hidden" name="id" value={m.id} />
                           <Button type="submit" variant="ghost" size="icon-sm" aria-label={`Видалити «${m.title}»`}>
                             <Trash2 aria-hidden />
@@ -167,14 +176,14 @@ function Filter({ label, name, value, options }: { label: string; name: string; 
   return (
     <label className="grid gap-1.5 text-sm">
       {label}
-      <select name={name} defaultValue={value || ""} className={select}>
+      <Select name={name} defaultValue={value || ""}>
         <option value="">Усі</option>
         {options.map(([v, text]) => (
           <option key={v} value={v}>
             {text}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

@@ -1,6 +1,7 @@
 // «Переглянути як учень»: the student's screen for any test of the school, shuffled as a student would get it, saving nothing.
 // Outside /dashboard so the staff sidebar doesn't frame it.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -8,6 +9,8 @@ import { questions, subjects, tests } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { forStudent, makeShuffle } from "@/lib/questions";
 import { TestScreen } from "@/app/student/attempt/[id]/test-screen";
+
+export const metadata: Metadata = { title: "Попередній перегляд" };
 
 export default function PreviewPage({ params }: PageProps<"/preview/[id]">) {
   return (

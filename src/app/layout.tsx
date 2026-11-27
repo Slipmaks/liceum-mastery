@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Liceum Mastery",
+  title: { default: "Liceum Mastery", template: "%s — Liceum Mastery" },
   description: "Тести у форматі НМТ для ліцеїв",
 };
 

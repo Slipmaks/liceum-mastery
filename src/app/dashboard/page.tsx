@@ -1,5 +1,6 @@
 // Staff home: what is open now, recent results, and the school's tests.
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
@@ -8,9 +9,11 @@ import { requireStaff } from "@/lib/auth";
 import { watchable } from "@/lib/staff";
 import { dayTime, hhmm } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Plus } from "lucide-react";
 import { createTest } from "./actions";
+
+export const metadata: Metadata = { title: "Тести" };
 
 export default function Dashboard() {
   return (
@@ -86,9 +89,9 @@ async function Home() {
       <section className="flex flex-wrap items-center justify-between gap-3 border-t pt-8">
         <p className="text-sm text-muted-foreground">Тест можна створити з нуля або зробити копію будь-якого тесту школи на його сторінці.</p>
         <form action={createTest}>
-          <Button type="submit">
+          <SubmitButton pendingLabel="Створюю…">
             <Plus aria-hidden /> Новий тест
-          </Button>
+          </SubmitButton>
         </form>
       </section>
 

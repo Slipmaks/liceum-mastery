@@ -4,12 +4,12 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
 import { saveMaterial } from "./actions";
 import { MATERIAL_TYPES, TYPE_LABEL } from "./types";
 
 type Values = { id?: number; title: string; url: string; type: string; subjectId: number; grade: number | null; topic: string };
-const select = "h-9 rounded-md border border-input bg-background px-2.5 text-sm";
 
 export function MaterialForm({ values, subjects }: { values?: Values; subjects: { id: number; name: string }[] }) {
   const [state, action, pending] = useActionState(saveMaterial, undefined);
@@ -29,7 +29,7 @@ export function MaterialForm({ values, subjects }: { values?: Values; subjects: 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="grid gap-1.5">
           <Label htmlFor="type">Тип</Label>
-          <select id="type" name="type" required defaultValue={v.type ?? ""} className={select}>
+          <Select id="type" name="type" required defaultValue={v.type ?? ""}>
             <option value="" disabled>
               Оберіть
             </option>
@@ -38,11 +38,11 @@ export function MaterialForm({ values, subjects }: { values?: Values; subjects: 
                 {TYPE_LABEL[t]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="subject">Предмет</Label>
-          <select id="subject" name="subject" required defaultValue={v.subject ?? ""} className={select}>
+          <Select id="subject" name="subject" required defaultValue={v.subject ?? ""}>
             <option value="" disabled>
               Оберіть
             </option>
@@ -51,18 +51,18 @@ export function MaterialForm({ values, subjects }: { values?: Values; subjects: 
                 {s.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="grade">Клас</Label>
-          <select id="grade" name="grade" defaultValue={v.grade ?? ""} className={select}>
+          <Select id="grade" name="grade" defaultValue={v.grade ?? ""}>
             <option value="">Будь-який</option>
             {Array.from({ length: 11 }, (_, i) => i + 1).map(g => (
               <option key={g} value={g}>
                 {g}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
       <div className="grid gap-1.5">
@@ -72,7 +72,7 @@ export function MaterialForm({ values, subjects }: { values?: Values; subjects: 
       <FormError>{state?.error}</FormError>
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
-          Зберегти
+          {pending ? "Зберігаю…" : "Зберегти"}
         </Button>
         <Button asChild variant="ghost">
           <Link href="/dashboard/materials">Скасувати</Link>
