@@ -11,6 +11,7 @@ import { getClass, isAdmin, schoolTeachers } from "@/lib/staff";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ConfirmForm } from "@/components/confirm-form";
+import { CopyButton } from "@/components/copy-button";
 import { SubmitButton } from "@/components/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { archiveStudent, moveStudent, resetPin, restoreStudent } from "../actions";
@@ -61,9 +62,12 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
           </p>
           <h1 className="mt-1 text-2xl font-semibold">{c.name}</h1>
         </div>
-        <div className="rounded-lg border bg-card px-4 py-2 text-right">
-          <p className="text-sm text-muted-foreground">Код для входу учнів</p>
-          <p className="font-mono text-2xl font-semibold tracking-widest tabular-nums">{c.code}</p>
+        <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-2">
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Код для входу учнів</p>
+            <p className="font-mono text-2xl font-semibold tracking-widest tabular-nums">{c.code}</p>
+          </div>
+          <CopyButton text={c.code} ariaLabel={`Скопіювати код класу ${c.code}`} />
         </div>
       </header>
 
@@ -98,7 +102,7 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
                       {s.locked ? "вхід заблоковано на 15 хв" : s.hasPin ? "встановлено" : "ще не входив"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap items-center justify-end gap-1">
+                      <div className="flex flex-nowrap items-center justify-end gap-1">
                         {(s.hasPin || s.locked) && (
                           <ConfirmForm
                             action={resetPin}
@@ -114,9 +118,16 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
                           </ConfirmForm>
                         )}
                         {others.length > 0 && (
-                          <form action={moveStudent} className="flex items-center gap-1">
+                          <ConfirmForm
+                            action={moveStudent}
+                            title="Перевести учня?"
+                            message={`Перевести ${s.name} до обраного класу? Попередні спроби учня залишаться прив’язаними до поточного класу.`}
+                            confirmLabel="Перевести"
+                            pendingLabel="Переводжу…"
+                            className="flex flex-nowrap items-center gap-1"
+                          >
                             <input type="hidden" name="student" value={s.id} />
-                            <Select name="to" required defaultValue="" aria-label={`Перевести ${s.name} до класу`} className="h-8 px-2">
+                            <Select name="to" required defaultValue="" aria-label={`Перевести ${s.name} до класу`} className="h-8 w-28 px-2">
                               <option value="" disabled>
                                 До класу…
                               </option>
@@ -126,10 +137,10 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
                                 </option>
                               ))}
                             </Select>
-                            <SubmitButton variant="ghost" size="sm" pendingLabel="Переводжу…">
+                            <Button type="submit" variant="ghost" size="sm">
                               Перевести
-                            </SubmitButton>
-                          </form>
+                            </Button>
+                          </ConfirmForm>
                         )}
                         <ConfirmForm
                           action={archiveStudent}

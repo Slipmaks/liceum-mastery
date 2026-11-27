@@ -81,32 +81,39 @@ export function parseDraft(v: unknown): Draft | null {
   return { title: v.title, topic: v.topic, subjectId: v.subjectId, grade: v.grade, timeLimitMin: v.timeLimitMin, questions: qs };
 }
 
+/** Single-question validation shared between per-question builder markers and the test readiness list. */
+export function questionProblems(q: Pick<DraftQuestion, "type" | "prompt" | "points" | "data">, index: number): string[] {
+  const out: string[] = [];
+  const n = `Питання ${index + 1}`;
+  const blank = (xs: Item[]) => xs.some(x => !x.text.trim());
+  if (!q.prompt.trim()) out.push(`${n}: немає тексту питання.`);
+  if (!(q.points > 0)) out.push(`${n}: балів має бути більше за 0.`);
+  const data = q.data;
+  if ("options" in data) {
+    if (data.options.length < 2) out.push(`${n}: потрібно щонайменше 2 варіанти.`);
+    if (blank(data.options)) out.push(`${n}: є порожній варіант.`);
+    if (q.type === "one" && data.correct.length !== 1) out.push(`${n}: позначте одну правильну відповідь.`);
+    if (q.type === "many" && data.correct.length === 0) out.push(`${n}: позначте правильні відповіді.`);
+  } else if ("pairs" in data) {
+    if (data.left.length < 2) out.push(`${n}: потрібно щонайменше 2 рядки.`);
+    if (data.right.length < data.left.length) out.push(`${n}: варіантів має бути не менше, ніж рядків.`);
+    if (blank(data.left) || blank(data.right)) out.push(`${n}: є порожній рядок або варіант.`);
+    if (data.left.some(l => !data.pairs[l.id])) out.push(`${n}: для кожного рядка оберіть правильну літеру.`);
+    else if (new Set(Object.values(data.pairs)).size < data.left.length) out.push(`${n}: два рядки мають однакову відповідь.`);
+  } else {
+    if (data.items.length < 2) out.push(`${n}: потрібно щонайменше 2 пункти.`);
+    if (blank(data.items)) out.push(`${n}: є порожній пункт.`);
+  }
+  return out;
+}
+
 /** What stops the test from being opened to a class, in Ukrainian. Empty means ready. */
 export function problems(d: Pick<Draft, "title" | "questions">): string[] {
   const out: string[] = [];
   if (!d.title.trim()) out.push("Немає назви тесту.");
   if (d.questions.length === 0) out.push("Немає жодного питання.");
   d.questions.forEach((q, i) => {
-    const n = `Питання ${i + 1}`;
-    const blank = (xs: Item[]) => xs.some(x => !x.text.trim());
-    if (!q.prompt.trim()) out.push(`${n}: немає тексту питання.`);
-    if (!(q.points > 0)) out.push(`${n}: балів має бути більше за 0.`);
-    const data = q.data;
-    if ("options" in data) {
-      if (data.options.length < 2) out.push(`${n}: потрібно щонайменше 2 варіанти.`);
-      if (blank(data.options)) out.push(`${n}: є порожній варіант.`);
-      if (q.type === "one" && data.correct.length !== 1) out.push(`${n}: позначте одну правильну відповідь.`);
-      if (q.type === "many" && data.correct.length === 0) out.push(`${n}: позначте правильні відповіді.`);
-    } else if ("pairs" in data) {
-      if (data.left.length < 2) out.push(`${n}: потрібно щонайменше 2 рядки.`);
-      if (data.right.length < data.left.length) out.push(`${n}: варіантів має бути не менше, ніж рядків.`);
-      if (blank(data.left) || blank(data.right)) out.push(`${n}: є порожній рядок або варіант.`);
-      if (data.left.some(l => !data.pairs[l.id])) out.push(`${n}: для кожного рядка оберіть правильну літеру.`);
-      else if (new Set(Object.values(data.pairs)).size < data.left.length) out.push(`${n}: два рядки мають однакову відповідь.`);
-    } else {
-      if (data.items.length < 2) out.push(`${n}: потрібно щонайменше 2 пункти.`);
-      if (blank(data.items)) out.push(`${n}: є порожній пункт.`);
-    }
+    out.push(...questionProblems(q, i));
   });
   return out;
 }

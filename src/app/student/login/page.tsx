@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormError } from "@/components/form-error";
 import { SubmitButton } from "@/components/submit-button";
+import { normalizeClassCode } from "@/lib/format";
 import { PinForm } from "./pin-form";
 import { RosterPicker } from "./roster-picker";
 
@@ -29,7 +30,7 @@ export default function StudentLogin({ searchParams }: PageProps<"/student/login
 
 async function Step({ searchParams }: Pick<PageProps<"/student/login">, "searchParams">) {
   const sp = await searchParams;
-  const code = typeof sp.code === "string" ? sp.code.trim().toUpperCase() : "";
+  const code = typeof sp.code === "string" ? normalizeClassCode(sp.code) : "";
   if (!code) return <CodeForm />;
 
   const [cls] = await db
@@ -60,9 +61,9 @@ async function Step({ searchParams }: Pick<PageProps<"/student/login">, "searchP
         <header className="grid gap-1">
           {heading}
           <h1 className="text-2xl font-semibold">Оберіть своє ім’я</h1>
+          <BackLink href="/student/login">Інший код класу</BackLink>
         </header>
         <RosterPicker code={code} roster={roster.map(s => ({ id: s.id, name: s.name }))} />
-        <BackLink href="/student/login">Інший код класу</BackLink>
       </>
     );
 
@@ -98,14 +99,15 @@ function CodeForm({ code, error }: { code?: string; error?: string }) {
             autoComplete="off"
             spellCheck={false}
             placeholder="Напр. L1-9A"
-            aria-describedby="code-hint"
-            className="h-12 font-mono text-lg tracking-widest uppercase tabular-nums"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "code-hint code-error" : "code-hint"}
+            className="h-12 font-mono text-lg tracking-widest uppercase tabular-nums placeholder:font-sans placeholder:text-base placeholder:normal-case placeholder:tracking-normal"
           />
-          <p id="code-hint" className="text-sm text-muted-foreground">
+          <p id="code-hint" className="text-sm text-pretty text-muted-foreground">
             Код класу запитайте в учителя або класного керівника.
           </p>
         </div>
-        <FormError>{error}</FormError>
+        <FormError id="code-error">{error}</FormError>
         <SubmitButton className="h-12 text-base" pendingLabel="Шукаю…">
           Далі
         </SubmitButton>

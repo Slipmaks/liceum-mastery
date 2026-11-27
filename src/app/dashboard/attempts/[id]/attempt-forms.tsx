@@ -1,21 +1,28 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormError, FormStatus } from "@/components/form-error";
-import { grantRetakeState, saveCommentState } from "../../actions";
+import { grantRetakeState, saveCommentState, type AttemptActionState } from "../../actions";
 
 export function CommentForm({ attemptId, defaultValue }: { attemptId: number; defaultValue: string }) {
-  const [state, action, pending] = useActionState(saveCommentState, undefined);
+  const [comment, setComment] = useState(defaultValue);
+  const [state, action, pending] = useActionState(async (prev: AttemptActionState, fd: FormData) => {
+    const res = await saveCommentState(prev, fd);
+    if (res?.value !== undefined) setComment(res.value);
+    return res;
+  }, undefined);
+
   return (
     <div className="grid gap-2">
-      <form key={state?.at} action={action} className="flex flex-wrap gap-2">
+      <form action={action} className="flex flex-wrap gap-2">
         <input type="hidden" name="attempt" value={attemptId} />
         <Input
           name="comment"
           maxLength={500}
-          defaultValue={state?.value ?? defaultValue}
+          value={comment}
+          onChange={e => setComment(e.target.value)}
           placeholder="Наприклад: сповіщення на телефоні, перевірено"
           aria-label="Коментар до позначки «можливе списування»"
           className="min-w-64 flex-1"
@@ -31,16 +38,25 @@ export function CommentForm({ attemptId, defaultValue }: { attemptId: number; de
 }
 
 export function RetakeForm({ attemptId }: { attemptId: number }) {
-  const [state, action, pending] = useActionState(grantRetakeState, undefined);
+  const [reason, setReason] = useState("");
+  const [state, action, pending] = useActionState(async (prev: AttemptActionState, fd: FormData) => {
+    const res = await grantRetakeState(prev, fd);
+    if (res?.ok) setReason("");
+    else if (res?.value !== undefined) setReason(res.value);
+    return res;
+  }, undefined);
+
   return (
     <div className="mt-2 grid gap-2">
-      <form key={state?.at} action={action} className="flex flex-wrap gap-2">
+      <form action={action} className="flex flex-wrap gap-2">
         <input type="hidden" name="attempt" value={attemptId} />
         <Input
           name="reason"
           required
           maxLength={300}
-          defaultValue={state?.value ?? ""}
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+          aria-invalid={Boolean(state?.error)}
           placeholder="Причина, наприклад: хворів, заблоковано помилково"
           aria-label="Причина повторної спроби"
           className="min-w-64 flex-1"

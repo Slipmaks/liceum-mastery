@@ -11,14 +11,14 @@ import { requireStaff } from "@/lib/auth";
 import { canOpen, watchable } from "@/lib/staff";
 import { answerLines, correctResponse } from "@/lib/questions";
 import { problems, TYPE_LABEL } from "@/lib/draft";
-import { dayTime } from "@/lib/format";
+import { dayTime, questionsLabel } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
-import { FormError } from "@/components/form-error";
 import { SubmitButton } from "@/components/submit-button";
 import { Copy, Eye, Pencil, Trash2 } from "lucide-react";
-import { copyTest, deleteDraft, openTest } from "../../actions";
+import { copyTest, deleteDraft } from "../../actions";
 import { ConfirmForm } from "@/components/confirm-form";
+import { OpenFormClient } from "./open-form";
 
 export const metadata: Metadata = { title: "Тест" };
 
@@ -73,7 +73,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
         </p>
         <h1 className="mt-1 text-2xl font-semibold">{test.title || "Без назви"}</h1>
         <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-          {test.grade} клас · {qs.length} питань · {total} балів · {test.minutes} хв · {test.author}
+          {test.grade} клас{test.topic ? ` · ${test.topic}` : ""} · {questionsLabel(qs.length)} · {total} балів · {test.minutes} хв · {test.author}
         </p>
         {test.status === "locked" && (
           <p className="mt-2 text-sm text-muted-foreground">Тест уже відкривали для класу, тому його не можна змінити. Щоб змінити, зробіть копію.</p>
@@ -177,6 +177,13 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
         <ol className="grid gap-4">
           {qs.map((q, i) => {
             const correct = "options" in q.data ? q.data.correct : [];
+            const extras =
+              "pairs" in q.data
+                ? (() => {
+                    const used = new Set(Object.values(q.data.pairs));
+                    return q.data.right.filter(r => !used.has(r.id)).map(r => r.text);
+                  })()
+                : [];
             return (
             <li key={q.id} className="grid gap-2 rounded-lg border bg-card p-4">
               <p className="text-sm text-muted-foreground tabular-nums">
@@ -192,6 +199,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
                       </li>
                     ))
                   : answerLines(q.data, correctResponse(q.data)).map(line => <li key={line}>{line}</li>)}
+                {extras.length > 0 && <li className="text-muted-foreground">Зайві варіанти: {extras.join(", ")}</li>}
               </ul>
             </li>
             );
@@ -212,52 +220,5 @@ async function OpenForm({ testId, classId, schoolId, empty, isDraft }: { testId:
     : [];
   if (roster.length === 0) return <p className="text-sm text-muted-foreground">У цьому класі немає учнів.</p>;
   roster.sort((a, b) => collator.compare(a.name, b.name));
-  const fields = (
-    <>
-      <input type="hidden" name="test" value={testId} />
-      <input type="hidden" name="class" value={classId} />
-      <label className="flex items-center gap-2 text-sm font-medium">
-        <input type="checkbox" name="whole" defaultChecked className="size-4 accent-foreground" />
-        Увесь клас, разом з учнями, які приєднаються пізніше
-      </label>
-      <fieldset className="grid gap-1 group-has-[input[name=whole]:checked]:hidden sm:grid-cols-2">
-        <legend className="mb-1 text-sm text-muted-foreground">Або оберіть учнів (наприклад, тих, хто був відсутній):</legend>
-        {roster.map(s => (
-          <label key={s.id} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="student" value={s.id} className="size-4 accent-foreground" />
-            {s.name}
-          </label>
-        ))}
-      </fieldset>
-      <FormError>{empty ? "Оберіть хоча б одного учня або весь клас." : undefined}</FormError>
-    </>
-  );
-
-  if (isDraft) {
-    return (
-      <ConfirmForm
-        action={openTest}
-        variant="default"
-        className="group grid gap-3 border-t pt-3"
-        title="Відкрити й зафіксувати тест?"
-        message="Після першого відкриття тест не можна буде змінити — редагувати можна лише копію."
-        confirmLabel="Відкрити тест"
-        pendingLabel="Відкриваю…"
-      >
-        {fields}
-        <Button type="submit" className="w-fit">
-          Відкрити тест
-        </Button>
-      </ConfirmForm>
-    );
-  }
-
-  return (
-    <form action={openTest} className="group grid gap-3 border-t pt-3">
-      {fields}
-      <SubmitButton className="w-fit" pendingLabel="Відкриваю…">
-        Відкрити тест
-      </SubmitButton>
-    </form>
-  );
+  return <OpenFormClient key={`${classId}-${empty ? 1 : 0}`} testId={testId} classId={classId} roster={roster} empty={empty} isDraft={isDraft} />;
 }

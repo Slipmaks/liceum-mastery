@@ -27,7 +27,7 @@ async function Home() {
   const me = await requireStaff();
   const runs = (closed: boolean) =>
     db
-      .select({ id: assignments.id, title: tests.title, className: classes.name, openedAt: assignments.openedAt, closedAt: assignments.closedAt })
+      .select({ id: assignments.id, title: tests.title, className: classes.name, wholeClass: assignments.wholeClass, openedAt: assignments.openedAt, closedAt: assignments.closedAt })
       .from(assignments)
       .innerJoin(tests, eq(tests.id, assignments.testId))
       .innerJoin(classes, eq(classes.id, assignments.classId))
@@ -61,6 +61,7 @@ async function Home() {
                 <Link href={`/dashboard/assignments/${a.id}`} className="flex items-baseline justify-between gap-4 rounded-lg border bg-card px-4 py-3 hover:bg-muted">
                   <span className="font-medium">
                     {a.title} · {a.className}
+                    {!a.wholeClass && <span className="ml-2 text-xs font-normal text-muted-foreground">· окремі учні</span>}
                   </span>
                   <span className="text-sm text-muted-foreground tabular-nums">відкрито о {hhmm(a.openedAt)}</span>
                 </Link>
@@ -75,9 +76,10 @@ async function Home() {
           <h2 className="text-lg font-semibold">Результати</h2>
           <ul className="grid gap-1 text-sm">
             {closed.map(a => (
-              <li key={a.id} className="flex items-baseline justify-between gap-4 border-b py-2">
+              <li key={a.id} className="flex items-baseline justify-between gap-4 border-b py-2 last:border-b-0">
                 <Link href={`/dashboard/assignments/${a.id}/report`} className="font-medium underline-offset-4 hover:underline">
                   {a.title} · {a.className}
+                  {!a.wholeClass && <span className="ml-2 text-xs font-normal text-muted-foreground">· окремі учні</span>}
                 </Link>
                 <span className="text-muted-foreground tabular-nums">{dayTime(a.closedAt!)}</span>
               </li>

@@ -38,6 +38,7 @@ async function Preview({ params }: Pick<PageProps<"/preview/[id]">, "params">) {
   return (
     <TestScreen
       preview
+      backHref={`/dashboard/tests/${id}`}
       attemptId={0}
       subject={test.subject}
       title={test.title || "Новий тест"}

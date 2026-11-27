@@ -72,14 +72,15 @@ async function StaffNav({ className }: { className?: string }) {
 }
 
 async function MobileMe() {
-  await requireStaff();
+  const me = await requireStaff();
   return (
     <Link
       href="/dashboard/profile"
+      title={me.title ? `${me.name} · ${me.title}` : me.name}
       className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-sidebar-accent-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-sidebar-ring/60"
     >
-      <User className="size-4" aria-hidden />
-      <span>Профіль</span>
+      <User className="size-4 shrink-0" aria-hidden />
+      <span className="max-w-28 truncate sm:max-w-44">{me.name}</span>
     </Link>
   );
 }

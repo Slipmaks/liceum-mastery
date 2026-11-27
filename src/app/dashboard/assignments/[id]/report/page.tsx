@@ -25,7 +25,10 @@ async function Report({ params }: Pick<PageProps<"/dashboard/assignments/[id]/re
   const a = await getAssignment(Number((await params).id), me);
   if (!a) notFound();
   const { questions, lines, correct, max } = await buildReport(a);
-  const done = lines.filter(l => l.score !== null).length;
+  const finishedLines = lines.filter(l => l.score !== null && l.grade !== null);
+  const done = finishedLines.length;
+  const avgScore = done ? pts(finishedLines.reduce((s, l) => s + l.score!, 0) / done) : "";
+  const avgGrade = done ? pts(finishedLines.reduce((s, l) => s + l.grade!, 0) / done) : "";
 
   return (
     <div className="grid gap-4">
@@ -63,10 +66,11 @@ async function Report({ params }: Pick<PageProps<"/dashboard/assignments/[id]/re
           <TableHeader>
             <TableRow className="bg-muted/60 hover:bg-muted/60">
               <TableHead className="w-10 text-right">№</TableHead>
-              <TableHead>Учень</TableHead>
+              <TableHead className="sticky left-0 z-10 border-r bg-muted">Учень</TableHead>
               {questions.map((q, i) => (
-                <TableHead key={q.id} className="text-right tabular-nums" title={q.prompt}>
-                  {i + 1}
+                <TableHead key={q.id} className="text-right tabular-nums" title={`${q.prompt} (макс. ${pts(q.points)} б.)`}>
+                  <div>{i + 1}</div>
+                  <div className="text-xs font-normal text-muted-foreground">/{pts(q.points)}</div>
                 </TableHead>
               ))}
               <TableHead className="text-right">Бал</TableHead>
@@ -80,7 +84,7 @@ async function Report({ params }: Pick<PageProps<"/dashboard/assignments/[id]/re
             {lines.map(l => (
               <TableRow key={l.student.id}>
                 <TableCell className="text-right text-muted-foreground tabular-nums">{l.n}</TableCell>
-                <TableCell className="font-medium whitespace-nowrap">
+                <TableCell className="sticky left-0 z-10 border-r bg-card font-medium whitespace-nowrap">
                   {l.attempt ? (
                     <Link href={`/dashboard/attempts/${l.attempt.id}`} className="underline-offset-4 hover:underline">
                       {l.student.name}
@@ -110,13 +114,15 @@ async function Report({ params }: Pick<PageProps<"/dashboard/assignments/[id]/re
           <TableFooter>
             <TableRow>
               <TableCell />
-              <TableCell className="text-muted-foreground">% правильних</TableCell>
+              <TableCell className="sticky left-0 z-10 border-r bg-muted text-muted-foreground">% правильних / середній</TableCell>
               {correct.map((c, i) => (
                 <TableCell key={questions[i].id} className="text-right tabular-nums">
                   {c === null ? "" : `${c}%`}
                 </TableCell>
               ))}
-              <TableCell colSpan={3} />
+              <TableCell className="text-right tabular-nums">{avgScore}</TableCell>
+              <TableCell className="text-right tabular-nums">{avgGrade}</TableCell>
+              <TableCell />
             </TableRow>
           </TableFooter>
         </Table>

@@ -5,6 +5,7 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { classes, invites, students, users } from "@/db/schema";
 import { createSession, destroySession, startStudentSession } from "@/lib/auth";
+import { normalizeClassCode } from "@/lib/format";
 import { hashSecret, verifySecret } from "@/lib/secret";
 
 export type FormState = { error: string; email?: string } | undefined;
@@ -33,7 +34,7 @@ export async function loginStudent(_: FormState, fd: FormData): Promise<FormStat
     .select({ id: students.id, pinHash: students.pinHash, lockedUntil: students.lockedUntil })
     .from(students)
     .innerJoin(classes, eq(classes.id, students.classId))
-    .where(and(eq(students.id, Number(fd.get("student")) || 0), eq(classes.code, str(fd, "code").toUpperCase()), isNull(students.archivedAt)));
+    .where(and(eq(students.id, Number(fd.get("student")) || 0), eq(classes.code, normalizeClassCode(str(fd, "code"))), isNull(students.archivedAt)));
   if (!s) return { error: "Учня не знайдено. Почніть спочатку." };
 
   if (s.lockedUntil && s.lockedUntil > new Date())

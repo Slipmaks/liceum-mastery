@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
-import { TriangleAlert } from "lucide-react";
+import { LockOpen, TriangleAlert } from "lucide-react";
 import { db } from "@/db";
 import { answers, attemptEvents, attempts, questions, retakeGrants, students, users } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
@@ -12,6 +12,9 @@ import { EVENT_LABEL } from "@/lib/attempt";
 import { getAssignment, pts } from "@/lib/staff";
 import { answerLines, correctResponse, grade12, type AnswerResponse } from "@/lib/questions";
 import { dayTime, hhmm } from "@/lib/format";
+import { FormStatus } from "@/components/form-error";
+import { SubmitButton } from "@/components/submit-button";
+import { unlockAttempt } from "../../actions";
 import { CommentForm, RetakeForm } from "./attempt-forms";
 
 export const metadata: Metadata = { title: "Спроба учня" };
@@ -58,26 +61,44 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
 
   return (
     <div className="grid max-w-3xl gap-8">
-      <header>
-        <p className="text-sm text-muted-foreground">
-          <Link href={`/dashboard/assignments/${a.id}/report`} className="underline-offset-4 hover:underline">
-            {a.title} · {a.className}
-          </Link>
-        </p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold">
-          {t.students.name}
-          {at.flagged && (
-            <span title="Можливе списування" className="text-warning-foreground">
-              <TriangleAlert className="size-5" role="img" aria-label="Можливе списування" />
-            </span>
-          )}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-          почав {dayTime(at.startedAt)} · {STATUS[at.status]}
-          {at.finishedAt && ` о ${hhmm(at.finishedAt)}`}
-          {at.status === "finished" && ` · ${pts(at.score ?? 0)} з ${pts(at.maxScore)} б. · оцінка ${grade12(at.score ?? 0, at.maxScore)}`}
-          {!isLast && " · це не остання спроба, рахується остання"}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            <Link href={a.closedAt ? `/dashboard/assignments/${a.id}/report` : `/dashboard/assignments/${a.id}`} className="underline-offset-4 hover:underline">
+              {a.title} · {a.className}
+            </Link>
+            {!a.closedAt && (
+              <>
+                {" · "}
+                <Link href={`/dashboard/assignments/${a.id}/report`} className="underline-offset-4 hover:underline">
+                  Звіт
+                </Link>
+              </>
+            )}
+          </p>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold">
+            {t.students.name}
+            {at.flagged && (
+              <span title="Можливе списування" className="text-warning-foreground">
+                <TriangleAlert className="size-5" role="img" aria-label="Можливе списування" />
+              </span>
+            )}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+            почав {dayTime(at.startedAt)} · {STATUS[at.status]}
+            {at.finishedAt && ` о ${hhmm(at.finishedAt)}`}
+            {at.status === "finished" && ` · ${pts(at.score ?? 0)} з ${pts(at.maxScore)} б. · оцінка ${grade12(at.score ?? 0, at.maxScore)}`}
+            {!isLast && " · це не остання спроба, рахується остання"}
+          </p>
+        </div>
+        {at.status === "locked" && (
+          <form action={unlockAttempt}>
+            <input type="hidden" name="attempt" value={id} />
+            <SubmitButton size="sm" pendingLabel="Розблоковую…">
+              <LockOpen aria-hidden /> Дозволити продовжити
+            </SubmitButton>
+          </form>
+        )}
       </header>
 
       {at.flagged && (
@@ -128,7 +149,13 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
               </li>
             ))}
           </ul>
-          {canRetake && <RetakeForm attemptId={id} />}
+          {canRetake ? (
+            <RetakeForm attemptId={id} />
+          ) : (
+            isLast &&
+            grants.length >= history.length &&
+            grants.length > 0 && <FormStatus>Повторну спробу дозволено — учень може почати її зі свого списку тестів.</FormStatus>
+          )}
         </section>
       )}
 
@@ -137,20 +164,28 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
         <ol className="grid gap-3">
           {qs.map((q, i) => {
             const g = byQuestion.get(q.id);
+            const score = g?.points ?? 0;
+            const isFull = !!g && score >= q.points;
+            const isPartial = !!g && score > 0 && score < q.points;
             return (
               <li key={q.id} className="grid gap-2 rounded-lg border bg-card p-4 text-sm">
                 <div className="flex items-baseline justify-between gap-4">
                   <p className="font-medium text-pretty">
                     {i + 1}. {q.prompt}
                   </p>
-                  <span className="shrink-0 font-medium tabular-nums">
-                    {pts(g?.points ?? 0)}/{pts(q.points)}
+                  <span className={isFull ? "shrink-0 font-semibold tabular-nums" : isPartial ? "shrink-0 font-medium tabular-nums" : "shrink-0 text-muted-foreground tabular-nums"}>
+                    {pts(score)}/{pts(q.points)}
+                    {isPartial && <span className="ml-1.5 text-xs font-normal text-muted-foreground">частково</span>}
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-muted-foreground">Відповідь учня</p>
-                    {g ? answerLines(q.data, g.response as AnswerResponse).map((l, idx) => <p key={`${idx}-${l}`}>{l}</p>) : <p className="text-muted-foreground">—</p>}
+                    {g ? (
+                      answerLines(q.data, g.response as AnswerResponse).map((l, idx) => <p key={`${idx}-${l}`}>{l}</p>)
+                    ) : (
+                      <p className="text-muted-foreground">Немає відповіді</p>
+                    )}
                   </div>
                   <div>
                     <p className="text-muted-foreground">Правильно</p>

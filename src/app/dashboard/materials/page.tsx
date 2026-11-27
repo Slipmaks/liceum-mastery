@@ -1,7 +1,6 @@
 // Materials bank: every teacher and admin of the school sees all of it; filters on every field, search by title.
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import Form from "next/form";
 import Link from "next/link";
 import { and, asc, desc, eq, ilike, ne } from "drizzle-orm";
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
@@ -10,11 +9,10 @@ import { materials, subjects, users } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { isAdmin, schoolSubjects } from "@/lib/staff";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { ConfirmForm } from "@/components/confirm-form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deleteMaterial } from "./actions";
+import { MaterialsFilter } from "./materials-filter";
 import { MATERIAL_TYPES, TYPE_LABEL, type MaterialType } from "./types";
 
 export const metadata: Metadata = { title: "Матеріали" };
@@ -87,25 +85,22 @@ async function Materials({ searchParams }: Pick<PageProps<"/dashboard/materials"
         </Button>
       </header>
 
-      <Form action="/dashboard/materials" className="flex flex-wrap items-end gap-2">
-        <label className="grid gap-1.5 text-sm">
-          Пошук за назвою
-          <Input name="q" type="search" defaultValue={f.q} className="w-56" />
-        </label>
-        <Filter label="Тип" name="type" value={f.type} options={MATERIAL_TYPES.map(t => [t, TYPE_LABEL[t]])} />
-        <Filter label="Предмет" name="subject" value={f.subject} options={subjectList.map(s => [s.id, s.name])} />
-        <Filter label="Клас" name="grade" value={f.grade} options={Array.from({ length: 11 }, (_, i) => [i + 1, String(i + 1)])} />
-        <Filter label="Тема" name="topic" value={f.topic} options={topics.map(t => [t.topic, t.topic])} />
-        <Filter label="Автор" name="author" value={f.author} options={authors.map(a => [a.id, a.name])} />
-        <Button type="submit" variant="outline">
-          Показати
-        </Button>
-        {filtered && (
-          <Button asChild variant="ghost">
-            <Link href="/dashboard/materials">Скинути</Link>
-          </Button>
-        )}
-      </Form>
+      <MaterialsFilter
+        values={{
+          q: f.q,
+          type: f.type,
+          subject: f.subject ? String(f.subject) : "",
+          grade: f.grade ? String(f.grade) : "",
+          topic: f.topic,
+          author: f.author ? String(f.author) : "",
+        }}
+        types={MATERIAL_TYPES.map(t => [t, TYPE_LABEL[t]])}
+        subjects={subjectList.map(s => [s.id, s.name])}
+        grades={Array.from({ length: 11 }, (_, i) => [i + 1, String(i + 1)])}
+        topics={topics.map(t => [t.topic, t.topic])}
+        authors={authors.map(a => [a.id, a.name])}
+        filtered={filtered}
+      />
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">{filtered ? "Нічого не знайдено. Спробуйте змінити фільтри." : "Матеріалів ще немає. Додайте перший."}</p>
@@ -128,7 +123,7 @@ async function Materials({ searchParams }: Pick<PageProps<"/dashboard/materials"
             <TableBody>
               {rows.map(m => (
                 <TableRow key={m.id}>
-                  <TableCell className="font-medium">
+                  <TableCell className="min-w-44 max-w-xs font-medium whitespace-normal">
                     <a href={m.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline-offset-4 hover:underline">
                       {m.title}
                       <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" role="img" aria-label="(відкриється в новій вкладці)" />
@@ -136,8 +131,8 @@ async function Materials({ searchParams }: Pick<PageProps<"/dashboard/materials"
                   </TableCell>
                   <TableCell>{TYPE_LABEL[m.type]}</TableCell>
                   <TableCell>{m.subject}</TableCell>
-                  <TableCell className="text-right tabular-nums">{m.grade ?? ""}</TableCell>
-                  <TableCell className="text-muted-foreground">{m.topic}</TableCell>
+                  <TableCell className="text-right tabular-nums">{m.grade ?? "—"}</TableCell>
+                  <TableCell className="max-w-48 text-muted-foreground whitespace-normal">{m.topic}</TableCell>
                   <TableCell className="text-muted-foreground">{m.author}</TableCell>
                   <TableCell>
                     {mayEdit(m.authorId) && (
@@ -169,21 +164,5 @@ async function Materials({ searchParams }: Pick<PageProps<"/dashboard/materials"
         </div>
       )}
     </div>
-  );
-}
-
-function Filter({ label, name, value, options }: { label: string; name: string; value: string | number; options: [string | number, string][] }) {
-  return (
-    <label className="grid gap-1.5 text-sm">
-      {label}
-      <Select name={name} defaultValue={value || ""}>
-        <option value="">Усі</option>
-        {options.map(([v, text]) => (
-          <option key={v} value={v}>
-            {text}
-          </option>
-        ))}
-      </Select>
-    </label>
   );
 }

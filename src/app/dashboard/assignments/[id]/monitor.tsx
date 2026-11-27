@@ -1,6 +1,6 @@
 "use client";
 // Monitor table: DESIGN.md › Class table, Cheating flag. Refreshes from the server every 5 s (no WebSockets).
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LockOpen, TriangleAlert } from "lucide-react";
@@ -46,11 +46,27 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
   const { assignmentId, rows: students } = props;
   const router = useRouter();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
+  const interactingRef = useRef(false);
+  const pendingRefreshRef = useRef(false);
 
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), 5000);
+    const id = setInterval(() => {
+      if (interactingRef.current) pendingRefreshRef.current = true;
+      else router.refresh();
+    }, 5000);
     return () => clearInterval(id);
   }, [router]);
+
+  const pauseRefresh = () => {
+    interactingRef.current = true;
+  };
+  const resumeRefresh = () => {
+    interactingRef.current = false;
+    if (pendingRefreshRef.current) {
+      pendingRefreshRef.current = false;
+      router.refresh();
+    }
+  };
 
   const active = FILTERS.find(f => f.id === filter)!;
   // Locked first (they need the teacher now), then flagged, then the class list order.
@@ -77,8 +93,11 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
           <h1 className="mt-1 text-2xl font-semibold">{props.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground tabular-nums">{props.meta}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <p className="text-right text-sm text-muted-foreground tabular-nums">оновлено о {props.updated}</p>
+          <Button asChild variant="outline">
+            <Link href={`/dashboard/assignments/${assignmentId}/report`}>Звіт</Link>
+          </Button>
           {props.canClose && (
             <ConfirmForm
               action={closeAssignment}
@@ -115,7 +134,15 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
         })}
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-lg border bg-card">
+      <div
+        className="mt-4 overflow-x-auto rounded-lg border bg-card"
+        onMouseEnter={pauseRefresh}
+        onMouseLeave={resumeRefresh}
+        onFocusCapture={pauseRefresh}
+        onBlurCapture={e => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) resumeRefresh();
+        }}
+      >
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/60 hover:bg-muted/60">
@@ -180,7 +207,7 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
                     {s.status === "locked" && s.attemptId && (
                       <form action={unlockAttempt}>
                         <input type="hidden" name="attempt" value={s.attemptId} />
-                        <SubmitButton size="sm" pendingLabel="Розблоковую…">
+                        <SubmitButton size="sm" pendingLabel="Розблоковую…" aria-label={`Дозволити продовжити: ${s.name}`}>
                           <LockOpen aria-hidden />
                           Дозволити продовжити
                         </SubmitButton>

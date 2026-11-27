@@ -35,13 +35,18 @@ export function SheetStrip({
     if (onSelect) activeRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [current, onSelect]);
 
+  const compactMonitor = !onSelect && !numbered && list.length > 14;
   const cellClasses = (state: CellState, i: number) =>
     cn(
-      "grid h-3.5 w-2.5 shrink-0 place-items-center rounded-[2px] border text-xs leading-none font-semibold tabular-nums",
+      "relative grid h-3.5 w-2.5 shrink-0 place-items-center rounded-[2px] border text-xs leading-none font-semibold tabular-nums",
+      compactMonitor && "w-2",
       state === "done"
         ? "border-primary bg-primary text-primary-foreground"
         : state === "partial"
-          ? "border-primary bg-accent text-accent-foreground"
+          ? cn(
+              "border-primary bg-accent text-accent-foreground after:pointer-events-none after:absolute after:right-0.5 after:bottom-0.5 after:rounded-full after:bg-primary",
+              numbered ? "after:size-1.5" : "after:size-1",
+            )
           : "border-input bg-sheet text-foreground/75",
       i === current && "outline-2 outline-offset-1 outline-primary",
       onSelect && i !== current && "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -74,7 +79,7 @@ export function SheetStrip({
   }
 
   return (
-    <div role="img" aria-label={label} className={cn("flex max-w-[180px] flex-wrap gap-0.5", className)}>
+    <div role="img" aria-label={label} className={cn("flex flex-nowrap gap-0.5", className)}>
       {list.map((state, i) => (
         <span key={i} className={cellClasses(state, i)}>
           {numbered && i + 1}

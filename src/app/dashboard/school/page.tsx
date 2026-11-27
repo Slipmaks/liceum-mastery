@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 import { ConfirmForm } from "@/components/confirm-form";
 import { SubmitButton } from "@/components/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { archiveStaff, deleteSubject, restoreStaff, revokeInvite } from "./actions";
+import { deleteSubject, restoreStaff, revokeInvite } from "./actions";
 import { InviteForm } from "./invite-form";
-import { AddSubjectForm, UpdateStaffForm } from "./school-forms";
+import { AddSubjectForm, StaffEditDialog } from "./school-forms";
 
 export const metadata: Metadata = { title: "Школа" };
 
@@ -34,7 +34,7 @@ export default function SchoolPage() {
 async function School() {
   const me = await requireStaff();
   if (!isAdmin(me)) redirect("/dashboard");
-  const [staff, archivedStaff, pending, subjectRows] = await db.batch([
+  const [staff, archivedStaff, pending, rawSubjects, usedTests, usedMaterials] = await db.batch([
     db
       .select({ id: users.id, name: users.name, email: users.email, rank: users.rank, title: users.title })
       .from(users)
@@ -47,15 +47,12 @@ async function School() {
       .select({ tokenHash: invites.tokenHash, email: invites.email, rank: invites.rank, expiresAt: invites.expiresAt })
       .from(invites)
       .where(and(eq(invites.schoolId, me.schoolId), isNull(invites.usedAt), gt(invites.expiresAt, sql`now()`))),
-    db
-      .select({
-        id: subjects.id,
-        name: subjects.name,
-        used: sql<boolean>`exists (select 1 from ${tests} where ${tests.subjectId} = ${subjects.id}) or exists (select 1 from ${materials} where ${materials.subjectId} = ${subjects.id})`,
-      })
-      .from(subjects)
-      .where(eq(subjects.schoolId, me.schoolId)),
+    db.select({ id: subjects.id, name: subjects.name }).from(subjects).where(eq(subjects.schoolId, me.schoolId)),
+    db.selectDistinct({ id: tests.subjectId }).from(tests).where(eq(tests.schoolId, me.schoolId)),
+    db.selectDistinct({ id: materials.subjectId }).from(materials).where(eq(materials.schoolId, me.schoolId)),
   ]);
+  const usedIds = new Set([...usedTests.map(r => r.id), ...usedMaterials.map(r => r.id)]);
+  const subjectRows = rawSubjects.map(s => ({ ...s, used: usedIds.has(s.id) }));
   staff.sort((a, b) => ORDER[a.rank] - ORDER[b.rank] || collator.compare(a.name, b.name));
   archivedStaff.sort((a, b) => collator.compare(a.name, b.name));
   subjectRows.sort((a, b) => collator.compare(a.name, b.name));
@@ -88,24 +85,10 @@ async function School() {
                   <TableCell>{RANK_LABEL[u.rank]}</TableCell>
                   <TableCell className="text-right">
                     {outranks(me, u.rank) && (
-                      <details className="text-left">
-                        <summary className="cursor-pointer text-right text-sm underline-offset-4 hover:underline">Змінити</summary>
-                        <div className="mt-2 grid w-72 gap-2">
-                          <UpdateStaffForm userId={u.id} ranks={ranks} initial={{ name: u.name, title: u.title ?? "", rank: u.rank }} />
-                          <ConfirmForm
-                            action={archiveStaff}
-                            title="Архівувати працівника?"
-                            message={`Звільнити ${u.name}? Вхід буде закрито, класне керівництво знято, а тести й результати залишаться.`}
-                            confirmLabel="Звільнити"
-                            pendingLabel="Архівую…"
-                          >
-                            <input type="hidden" name="user" value={u.id} />
-                            <Button type="submit" variant="ghost" size="sm">
-                              Звільнити
-                            </Button>
-                          </ConfirmForm>
-                        </div>
-                      </details>
+                      <StaffEditDialog
+                        user={{ id: u.id, name: u.name, title: u.title ?? "", rank: u.rank }}
+                        ranks={ranks}
+                      />
                     )}
                   </TableCell>
                 </TableRow>

@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { FormError } from "@/components/form-error";
 
 type ConfirmFormProps = {
   action: (fd: FormData) => Promise<void>;
@@ -20,8 +21,15 @@ type ConfirmFormProps = {
   pendingLabel?: string;
   variant?: "default" | "graphite" | "outline";
   className?: string;
+  onBeforeOpen?: (form: HTMLFormElement) => boolean;
   children: React.ReactNode;
 };
+
+function isNextNavigationError(err: unknown): boolean {
+  if (!err || typeof err !== "object" || !("digest" in err)) return false;
+  const digest = (err as { digest?: unknown }).digest;
+  return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("NEXT_NOT_FOUND"));
+}
 
 /** A form that asks via an Exam Paper AlertDialog before an action with lasting consequences. */
 export function ConfirmForm({
@@ -32,10 +40,12 @@ export function ConfirmForm({
   pendingLabel = "Виконую…",
   variant = "graphite",
   className,
+  onBeforeOpen,
   children,
 }: ConfirmFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -46,7 +56,10 @@ export function ConfirmForm({
         className={className}
         onSubmit={e => {
           e.preventDefault();
-          if (!pending) setOpen(true);
+          if (pending) return;
+          if (onBeforeOpen && !onBeforeOpen(e.currentTarget)) return;
+          setError(null);
+          setOpen(true);
         }}
       >
         {children}
@@ -54,7 +67,10 @@ export function ConfirmForm({
       <AlertDialog
         open={open}
         onOpenChange={next => {
-          if (!pending) setOpen(next);
+          if (!pending) {
+            if (!next) setError(null);
+            setOpen(next);
+          }
         }}
       >
         <AlertDialogContent>
@@ -62,6 +78,7 @@ export function ConfirmForm({
             <AlertDialogTitle>{title}</AlertDialogTitle>
             <AlertDialogDescription>{message}</AlertDialogDescription>
           </AlertDialogHeader>
+          <FormError>{error}</FormError>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Скасувати</AlertDialogCancel>
             <AlertDialogAction
@@ -71,9 +88,15 @@ export function ConfirmForm({
                 e.preventDefault();
                 if (!formRef.current || pending) return;
                 const fd = new FormData(formRef.current);
+                setError(null);
                 startTransition(async () => {
-                  await action(fd);
-                  setOpen(false);
+                  try {
+                    await action(fd);
+                    setOpen(false);
+                  } catch (err) {
+                    if (isNextNavigationError(err)) throw err;
+                    setError("Не вдалося виконати дію. Перевірте з’єднання та спробуйте ще раз.");
+                  }
                 });
               }}
             >

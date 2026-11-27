@@ -1,7 +1,6 @@
 // The live monitor of an open assignment (PRODUCT.md › Teacher views). A closed one goes to its report.
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -9,7 +8,7 @@ import { assignmentStudents, students } from "@/db/schema";
 import { requireStaff } from "@/lib/auth";
 import { EVENT_LABEL } from "@/lib/attempt";
 import { getAssignment, loadResults } from "@/lib/staff";
-import { hhmm, mmss } from "@/lib/format";
+import { hhmm, mmss, questionsLabel } from "@/lib/format";
 import { SubmitButton } from "@/components/submit-button";
 import { addStudents } from "../../actions";
 import { Monitor, type MonitorRow } from "./monitor";
@@ -69,7 +68,7 @@ async function Live({ params }: Pick<PageProps<"/dashboard/assignments/[id]">, "
         canClose={a.canManage}
         crumb={a.subject}
         title={`${a.title} · ${a.className}`}
-        meta={`${questions.length} питань · ліміт ${a.minutes} хв · відкрито о ${hhmm(a.openedAt)}`}
+        meta={`${questionsLabel(questions.length)} · ліміт ${a.minutes} хв · відкрито о ${hhmm(a.openedAt)}`}
         updated={new Intl.DateTimeFormat("uk", { timeZone: "Europe/Kyiv", timeStyle: "medium" }).format(new Date())}
         rows={view}
       />
@@ -92,11 +91,6 @@ async function Live({ params }: Pick<PageProps<"/dashboard/assignments/[id]">, "
           </form>
         </details>
       )}
-      <p className="text-sm">
-        <Link href={`/dashboard/assignments/${a.id}/report`} className="underline-offset-4 hover:underline">
-          Звіт за поточними даними
-        </Link>
-      </p>
     </div>
   );
 }

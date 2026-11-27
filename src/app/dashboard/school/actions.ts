@@ -136,13 +136,20 @@ export async function addSubjectState(_: SubjectFormState, fd: FormData): Promis
 export async function deleteSubject(fd: FormData) {
   const me = await requireAdmin();
   const id = Number(fd.get("subject")) || 0;
-  await db.delete(subjects).where(
-    and(
-      eq(subjects.id, id),
-      eq(subjects.schoolId, me.schoolId),
-      sql`not exists (select 1 from ${tests} where ${tests.subjectId} = ${id})`,
-      sql`not exists (select 1 from ${materials} where ${materials.subjectId} = ${id})`,
-    ),
-  );
+  const deleted = await db
+    .delete(subjects)
+    .where(
+      and(
+        eq(subjects.id, id),
+        eq(subjects.schoolId, me.schoolId),
+        sql`not exists (select 1 from ${tests} where ${tests.subjectId} = ${id})`,
+        sql`not exists (select 1 from ${materials} where ${materials.subjectId} = ${id})`,
+      ),
+    )
+    .returning({ id: subjects.id });
+  if (deleted.length === 0) {
+    const [stillThere] = await db.select({ id: subjects.id }).from(subjects).where(and(eq(subjects.id, id), eq(subjects.schoolId, me.schoolId)));
+    if (stillThere) throw new Error("subject_used");
+  }
   done();
 }

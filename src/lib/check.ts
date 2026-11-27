@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { forStudent, grade12, isValidResponse, makeShuffle, scoreAnswer } from "./questions.ts";
 import { hashSecret, verifySecret } from "./secret.ts";
 import { blankQuestion, nextId, parseDraft, problems } from "./draft.ts";
+import { normalizeClassCode, pluralUk, questionsLabel, studentsLabel } from "./format.ts";
 
 const opts = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `o${i + 1}`, text: "" }));
 const one = { type: "one" as const, points: 1, data: { options: opts(4), correct: ["o2"] } };
@@ -70,5 +71,16 @@ const ready = { ...meta, questions: [{ type: "one" as const, prompt: "?", points
 assert.deepEqual(problems(ready), []);
 assert.deepEqual(problems({ ...ready, title: " " }), ["Немає назви тесту."]);
 assert.equal(nextId([{ id: "o1", text: "" }, { id: "o4", text: "" }], "o"), "o5");
+
+assert.equal(pluralUk(1, "учень", "учні", "учнів"), "учень");
+assert.equal(pluralUk(2, "учень", "учні", "учнів"), "учні");
+assert.equal(pluralUk(11, "учень", "учні", "учнів"), "учнів");
+assert.equal(pluralUk(21, "учень", "учні", "учнів"), "учень");
+assert.equal(questionsLabel(4), "4 питання");
+assert.equal(questionsLabel(5), "5 питань");
+assert.equal(questionsLabel(12), "12 питань");
+assert.equal(studentsLabel(10), "10 учнів");
+assert.equal(normalizeClassCode(" l1-9а "), "L1-9A");
+assert.equal(normalizeClassCode("авсенікмортх"), "ABCEHIKMOPTX");
 
 console.log("ok");

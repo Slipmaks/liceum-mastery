@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -13,7 +14,14 @@ export const metadata: Metadata = { title: "Редагувати матеріа�
 export default function EditMaterialPage({ params }: PageProps<"/dashboard/materials/[id]/edit">) {
   return (
     <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold">Редагувати матеріал</h1>
+      <header>
+        <p className="text-sm text-muted-foreground">
+          <Link href="/dashboard/materials" className="underline-offset-4 hover:underline">
+            Матеріали
+          </Link>
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold">Редагувати матеріал</h1>
+      </header>
       <Suspense>
         <Edit params={params} />
       </Suspense>

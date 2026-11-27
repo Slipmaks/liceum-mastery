@@ -29,8 +29,11 @@ export function Nav({ className, sections = [] }: { className?: string; sections
 
 function Current(props: { className?: string; sections: Section[] }) {
   const path = usePathname();
-  // Everything under /dashboard that isn't another section is about tests.
-  const current = NAV.findLast(n => path === n.href || path.startsWith(`${n.href}/`))?.href;
+  // Everything under /dashboard except /profile or another named section is about tests.
+  const current =
+    path === "/dashboard/profile" || path.startsWith("/dashboard/profile/")
+      ? undefined
+      : NAV.findLast(n => path === n.href || path.startsWith(`${n.href}/`))?.href;
   return <Links {...props} current={current} />;
 }
 

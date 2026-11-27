@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
+import { Check } from "lucide-react";
 import { db } from "@/db";
 import { answers, assignments, attempts, questions, subjects, tests } from "@/db/schema";
 import { requireStudent } from "@/lib/auth";
@@ -53,12 +54,22 @@ async function Attempt({ params }: Pick<PageProps<"/student/attempt/[id]">, "par
 
   if (state.status === "finished") {
     const copy = FINISHED_COPY[state.finishReason ?? "submitted"];
+    const [[{ n: savedCount }], [{ n: totalCount }]] = await db.batch([
+      db.select({ n: count() }).from(answers).where(eq(answers.attemptId, id)),
+      db.select({ n: count() }).from(questions).where(eq(questions.testId, a.testId)),
+    ]);
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
         <LeaveFullscreen />
+        <span className="grid size-14 place-items-center rounded-full bg-success-soft text-success">
+          <Check className="size-6" aria-hidden />
+        </span>
         <h1 className="text-2xl font-semibold text-balance">{copy.heading}</h1>
         <p className="max-w-sm text-pretty text-muted-foreground">
           {a.title} · {copy.note}
+        </p>
+        <p className="text-sm text-muted-foreground tabular-nums">
+          Збережено відповідей: {savedCount} з {totalCount}
         </p>
         <Button asChild variant="outline" className="mt-2 h-12 px-6 text-base">
           <Link href="/student">До списку тестів</Link>

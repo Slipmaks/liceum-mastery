@@ -105,6 +105,7 @@ export async function unlockAttempt(fd: FormData) {
       ...(cause?.type === "second_device" ? [db.delete(sessions).where(eq(sessions.studentId, t.studentId))] : []),
     ]);
   revalidatePath(`/dashboard/assignments/${a.id}`);
+  revalidatePath(`/dashboard/attempts/${attemptId}`);
 }
 
 /** One more attempt for one student; the last attempt counts. A reason is required. */
