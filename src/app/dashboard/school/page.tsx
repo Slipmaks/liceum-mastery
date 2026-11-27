@@ -15,6 +15,7 @@ import { ConfirmForm } from "@/components/confirm-form";
 import { SubmitButton } from "@/components/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deleteSubject, restoreStaff, revokeInvite } from "./actions";
+import { ActionForm } from "@/components/action-form";
 import { InviteForm } from "./invite-form";
 import { AddSubjectForm, StaffEditDialog } from "./school-forms";
 
@@ -107,12 +108,12 @@ async function School() {
                     {u.name} <span className="text-muted-foreground">· {u.email} · {RANK_LABEL[u.rank]}</span>
                   </span>
                   {outranks(me, u.rank) && (
-                    <form action={restoreStaff}>
+                    <ActionForm action={restoreStaff} className="justify-items-end">
                       <input type="hidden" name="user" value={u.id} />
                       <SubmitButton variant="ghost" size="sm" pendingLabel="Повертаю…">
                         Повернути
                       </SubmitButton>
-                    </form>
+                    </ActionForm>
                   )}
                 </li>
               ))}
@@ -132,12 +133,12 @@ async function School() {
                 <span>
                   {i.email} · {RANK_LABEL[i.rank]} <span className="text-muted-foreground tabular-nums">· діє до {dayTime(i.expiresAt)}</span>
                 </span>
-                <form action={revokeInvite}>
+                <ActionForm action={revokeInvite} className="justify-items-end">
                   <input type="hidden" name="invite" value={i.tokenHash} />
                   <SubmitButton variant="ghost" size="sm" pendingLabel="Скасовую…">
                     Скасувати
                   </SubmitButton>
-                </form>
+                </ActionForm>
               </li>
             ))}
           </ul>

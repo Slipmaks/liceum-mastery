@@ -8,18 +8,20 @@ import { requireStaff } from "@/lib/auth";
 import { finalizeDue } from "@/lib/attempt";
 import { canOpen, getAssignment, schoolSubjects } from "@/lib/staff";
 import { parseDraft, problems } from "@/lib/draft";
+import type { ActionResult } from "@/components/action-form";
 
 const num = (fd: FormData, k: string) => Number(fd.get(k)) || 0;
 const ids = (fd: FormData, k: string) => fd.getAll(k).map(Number).filter(Number.isInteger);
 
 /** «Відкрити для класу»: the whole class, or the listed students of it. The first open locks the test for good. */
-export async function openTest(fd: FormData) {
+export async function openTest(fd: FormData): Promise<ActionResult> {
   const me = await requireStaff();
   const [[test], [cls]] = await db.batch([
     db.select({ id: tests.id, authorId: tests.authorId, title: tests.title }).from(tests).where(and(eq(tests.id, num(fd, "test")), eq(tests.schoolId, me.schoolId))),
     db.select({ id: classes.id }).from(classes).where(and(eq(classes.id, num(fd, "class")), eq(classes.schoolId, me.schoolId))),
   ]);
-  if (!test || !cls || !canOpen(me, test)) redirect("/dashboard");
+  if (!test || !canOpen(me, test)) return { error: "Цей тест не можна відкрити: його видалено або у вас немає на це права." };
+  if (!cls) return { error: "Цього класу вже немає. Оберіть інший." };
   const qs = await db.select({ type: questions.type, prompt: questions.prompt, points: questions.points, data: questions.data }).from(questions).where(eq(questions.testId, test.id));
   if (problems({ title: test.title, questions: qs }).length) redirect(`/dashboard/tests/${test.id}`);
   const wholeClass = fd.get("whole") === "on";
@@ -42,10 +44,12 @@ export async function openTest(fd: FormData) {
 }
 
 /** While the test is open, the teacher can add students to a listed (not whole-class) assignment. */
-export async function addStudents(fd: FormData) {
+export async function addStudents(fd: FormData): Promise<ActionResult> {
   const me = await requireStaff();
   const a = await getAssignment(num(fd, "assignment"), me);
-  if (!a?.canManage || a.closedAt || a.wholeClass) redirect("/dashboard");
+  if (!a?.canManage) return { error: "Додавати учнів може лише автор тесту або адміністрація." };
+  if (a.closedAt) return { error: "Тест уже закрито — додати учнів не можна." };
+  if (a.wholeClass) return { error: "Тест уже відкрито для всього класу." };
   const picked = await db
     .select({ id: students.id })
     .from(students)
@@ -62,31 +66,33 @@ export async function addStudents(fd: FormData) {
 }
 
 /** «Закрити тест»: every attempt still running is finished at this moment. */
-export async function closeAssignment(fd: FormData) {
+export async function closeAssignment(fd: FormData): Promise<ActionResult> {
   const me = await requireStaff();
   const a = await getAssignment(num(fd, "assignment"), me);
-  if (!a?.canManage) redirect("/dashboard");
+  if (!a?.canManage) return { error: "Закрити тест може лише автор тесту або адміністрація." };
   await db.update(assignments).set({ closedAt: sql`now()` }).where(and(eq(assignments.id, a.id), isNull(assignments.closedAt)));
   await finalizeDue(eq(attempts.assignmentId, a.id));
   redirect(`/dashboard/assignments/${a.id}/report`);
 }
 
-/** The attempt and its assignment, if the caller may watch it. */
+/** The attempt and its assignment, or null when it is gone or the caller may not watch it. */
 async function watchedAttempt(attemptId: number) {
   const me = await requireStaff();
   const [t] = await db.select({ assignmentId: attempts.assignmentId, studentId: attempts.studentId, status: attempts.status }).from(attempts).where(eq(attempts.id, attemptId));
   const a = t && (await getAssignment(t.assignmentId, me));
-  if (!a) redirect("/dashboard");
-  return { me, t, a };
+  return a ? { me, t, a } : null;
 }
+const NOT_WATCHED = "Цю спробу не знайдено або у вас немає до неї доступу.";
 
 /**
  * «Дозволити продовжити». If the lock came from a login on a second device, the student's sessions are ended too,
  * so they can log in on the device they now have; the first open there is not a reopen.
  */
-export async function unlockAttempt(fd: FormData) {
+export async function unlockAttempt(fd: FormData): Promise<ActionResult> {
   const attemptId = num(fd, "attempt");
-  const { t, a } = await watchedAttempt(attemptId);
+  const w = await watchedAttempt(attemptId);
+  if (!w) return { error: NOT_WATCHED };
+  const { t, a } = w;
   await finalizeDue(eq(attempts.id, attemptId));
   const [cause] = await db
     .select({ type: attemptEvents.type })
@@ -108,36 +114,12 @@ export async function unlockAttempt(fd: FormData) {
   revalidatePath(`/dashboard/attempts/${attemptId}`);
 }
 
-/** One more attempt for one student; the last attempt counts. A reason is required. */
-export async function grantRetake(fd: FormData) {
-  const attemptId = num(fd, "attempt");
-  const { me, t, a } = await watchedAttempt(attemptId);
-  const reason = String(fd.get("reason") ?? "").trim();
-  if (reason && t.status === "finished") {
-    // Only on the student's last attempt, and only if no grant is waiting to be used.
-    const [[{ tries }], [{ grants }]] = await db.batch([
-      db.select({ tries: sql<number>`count(*)::int` }).from(attempts).where(and(eq(attempts.assignmentId, a.id), eq(attempts.studentId, t.studentId))),
-      db.select({ grants: sql<number>`count(*)::int` }).from(retakeGrants).where(and(eq(retakeGrants.assignmentId, a.id), eq(retakeGrants.studentId, t.studentId))),
-    ]);
-    if (grants < tries) await db.insert(retakeGrants).values({ assignmentId: a.id, studentId: t.studentId, grantedBy: me.id, reason });
-  }
-  revalidatePath(`/dashboard/attempts/${attemptId}`);
-}
-
 export type AttemptActionState = { error?: string; ok?: boolean; value?: string; at?: number } | undefined;
 
 /** The teacher's note on a flagged attempt. The flag itself is never cleared and the score is never changed. */
-export async function saveComment(fd: FormData) {
-  const attemptId = num(fd, "attempt");
-  await watchedAttempt(attemptId);
-  const comment = String(fd.get("comment") ?? "").trim();
-  await db.update(attempts).set({ teacherComment: comment || null }).where(eq(attempts.id, attemptId));
-  revalidatePath(`/dashboard/attempts/${attemptId}`);
-}
-
 export async function saveCommentState(_: AttemptActionState, fd: FormData): Promise<AttemptActionState> {
   const attemptId = num(fd, "attempt");
-  await watchedAttempt(attemptId);
+  if (!(await watchedAttempt(attemptId))) return { error: NOT_WATCHED, at: Date.now() };
   const comment = String(fd.get("comment") ?? "").trim().slice(0, 500);
   await db.update(attempts).set({ teacherComment: comment || null }).where(eq(attempts.id, attemptId));
   revalidatePath(`/dashboard/attempts/${attemptId}`);
@@ -146,7 +128,9 @@ export async function saveCommentState(_: AttemptActionState, fd: FormData): Pro
 
 export async function grantRetakeState(_: AttemptActionState, fd: FormData): Promise<AttemptActionState> {
   const attemptId = num(fd, "attempt");
-  const { me, t, a } = await watchedAttempt(attemptId);
+  const w = await watchedAttempt(attemptId);
+  if (!w) return { error: NOT_WATCHED, at: Date.now() };
+  const { me, t, a } = w;
   const reason = String(fd.get("reason") ?? "").trim().slice(0, 300);
   if (!reason) return { error: "Вкажіть причину повторної спроби.", value: "", at: Date.now() };
   if (t.status !== "finished") return { error: "Поточну спробу ще не завершено.", value: reason, at: Date.now() };

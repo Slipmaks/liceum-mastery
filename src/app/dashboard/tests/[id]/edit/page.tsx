@@ -1,4 +1,5 @@
 // The builder: only the author's own draft. A locked test is read-only; its page offers a copy instead.
+import { isId } from "@/lib/utils";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -22,10 +23,10 @@ export default function EditPage({ params }: PageProps<"/dashboard/tests/[id]/ed
 async function Edit({ params }: Pick<PageProps<"/dashboard/tests/[id]/edit">, "params">) {
   const me = await requireStaff();
   const id = Number((await params).id);
-  const [test] = Number.isInteger(id)
+  const [test] = isId(id)
     ? await db.select().from(tests).where(and(eq(tests.id, id), eq(tests.schoolId, me.schoolId), eq(tests.authorId, me.id), eq(tests.status, "draft")))
     : [];
-  if (!test) redirect(Number.isInteger(id) ? `/dashboard/tests/${id}` : "/dashboard");
+  if (!test) redirect(isId(id) ? `/dashboard/tests/${id}` : "/dashboard");
   const [qs, subjectList] = await Promise.all([
     db.select().from(questions).where(eq(questions.testId, id)).orderBy(asc(questions.position)),
     schoolSubjects(me.schoolId),

@@ -1,5 +1,6 @@
 // «Переглянути як учень»: the student's screen for any test of the school, shuffled as a student would get it, saving nothing.
 // Outside /dashboard so the staff sidebar doesn't frame it.
+import { isId } from "@/lib/utils";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -23,7 +24,7 @@ export default function PreviewPage({ params }: PageProps<"/preview/[id]">) {
 async function Preview({ params }: Pick<PageProps<"/preview/[id]">, "params">) {
   const me = await requireStaff();
   const id = Number((await params).id);
-  const [test] = Number.isInteger(id)
+  const [test] = isId(id)
     ? await db
         .select({ title: tests.title, minutes: tests.timeLimitMin, subject: subjects.name })
         .from(tests)

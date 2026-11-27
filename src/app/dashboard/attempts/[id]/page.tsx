@@ -1,4 +1,5 @@
 // One student's attempt: event log, answers against the key, the teacher's comment, and retakes (PRODUCT.md › Anti-cheat, Retakes).
+import { isId } from "@/lib/utils";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -15,6 +16,7 @@ import { dayTime, hhmm } from "@/lib/format";
 import { FormStatus } from "@/components/form-error";
 import { SubmitButton } from "@/components/submit-button";
 import { unlockAttempt } from "../../actions";
+import { ActionForm } from "@/components/action-form";
 import { CommentForm, RetakeForm } from "./attempt-forms";
 
 export const metadata: Metadata = { title: "Спроба учня" };
@@ -32,7 +34,7 @@ const STATUS = { in_progress: "пише", locked: "заблоковано", fini
 async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "params">) {
   const me = await requireStaff();
   const id = Number((await params).id);
-  const [t] = Number.isInteger(id)
+  const [t] = isId(id)
     ? await db.select().from(attempts).innerJoin(students, eq(students.id, attempts.studentId)).where(eq(attempts.id, id))
     : [];
   const a = t && (await getAssignment(t.attempts.assignmentId, me));
@@ -92,12 +94,12 @@ async function Attempt({ params }: Pick<PageProps<"/dashboard/attempts/[id]">, "
           </p>
         </div>
         {at.status === "locked" && (
-          <form action={unlockAttempt}>
+          <ActionForm action={unlockAttempt}>
             <input type="hidden" name="attempt" value={id} />
             <SubmitButton size="sm" pendingLabel="Розблоковую…">
               <LockOpen aria-hidden /> Дозволити продовжити
             </SubmitButton>
-          </form>
+          </ActionForm>
         )}
       </header>
 

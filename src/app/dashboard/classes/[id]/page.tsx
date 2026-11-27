@@ -15,6 +15,7 @@ import { CopyButton } from "@/components/copy-button";
 import { SubmitButton } from "@/components/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { archiveStudent, moveStudent, resetPin, restoreStudent } from "../actions";
+import { ActionForm } from "@/components/action-form";
 import { AddStudentsForm, UpdateClassForm } from "../class-forms";
 
 export const metadata: Metadata = { title: "Клас" };
@@ -172,12 +173,12 @@ async function Roster({ params }: Pick<PageProps<"/dashboard/classes/[id]">, "pa
             {archived.map(s => (
               <li key={s.id} className="flex items-center justify-between gap-4 border-b py-1">
                 {s.name}
-                <form action={restoreStudent}>
+                <ActionForm action={restoreStudent} className="justify-items-end">
                   <input type="hidden" name="student" value={s.id} />
                   <SubmitButton variant="ghost" size="sm" pendingLabel="Повертаю…">
                     Повернути
                   </SubmitButton>
-                </form>
+                </ActionForm>
               </li>
             ))}
           </ul>

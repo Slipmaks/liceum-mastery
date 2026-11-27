@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LockOpen, TriangleAlert } from "lucide-react";
+import { Lock, LockOpen, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SheetStrip } from "@/components/sheet-strip";
+import { ActionForm } from "@/components/action-form";
 import { ConfirmForm } from "@/components/confirm-form";
 import { SubmitButton } from "@/components/submit-button";
 import { cn } from "@/lib/utils";
@@ -46,9 +47,6 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
   const { assignmentId, rows: students } = props;
   const router = useRouter();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
-  // Data refreshes every 5 s no matter what. While the pointer or focus is in the table, only the row order
-  // (and which rows show) holds still, so an unlock button never slides out from under the cursor.
-  const [frozen, setFrozen] = useState<{ order: number[]; locked: Set<number> } | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 5000);
@@ -56,22 +54,19 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
   }, [router]);
 
   const active = FILTERS.find(f => f.id === filter)!;
-  // Locked first (they need the teacher now), then flagged, then the class list order.
-  const rank = (s: MonitorRow) => (s.status === "locked" ? 0 : s.flagged ? 1 : 2);
-  const sorted = students.filter(active.test).toSorted((a, b) => rank(a) - rank(b) || a.n - b.n);
-  const rows = frozen
-    ? [
-        ...frozen.order.flatMap(n => students.find(s => s.n === n) ?? []),
-        ...sorted.filter(s => !frozen.order.includes(s.n)),
-      ]
-    : sorted;
-  const newLocks = frozen ? students.filter(s => s.status === "locked" && !frozen.locked.has(s.n)).length : 0;
-  const freeze = () =>
-    setFrozen(f => f ?? { order: rows.map(s => s.n), locked: new Set(students.filter(s => s.status === "locked").map(s => s.n)) });
-  const unfreeze = () => setFrozen(null);
+  // The table keeps the class-list order, so no row moves under the pointer; locked students surface in the
+  // pinned strip above it, with the unlock there (DESIGN.md › Class table).
+  const rows = students.filter(active.test).toSorted((a, b) => a.n - b.n);
+  const locked = students.filter(s => s.status === "locked");
   const total = students[0]?.answered.length ?? 0;
   const writingCount = students.filter(s => s.status === "writing").length;
-  const lockedCount = students.filter(s => s.status === "locked").length;
+  const lockedCount = locked.length;
+
+  // The tab says it too, for a teacher who switched to another tab.
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\) /, "");
+    document.title = lockedCount ? `(${lockedCount}) ${base}` : base;
+  }, [lockedCount]);
   const closeMessage =
     writingCount + lockedCount > 0
       ? `Зараз пишуть ${writingCount}, заблоковано ${lockedCount}. Усі незавершені роботи буде здано в поточному стані.`
@@ -129,25 +124,10 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
             </Button>
           );
         })}
-        {newLocks > 0 && (
-          <p className="ml-auto self-center text-sm font-medium text-destructive tabular-nums">
-            Нові блокування: {newLocks} — піднімуться нагору, коли курсор залишить таблицю
-          </p>
-        )}
       </div>
 
-      <p className="sr-only" aria-live="polite">
-        Заблоковано: {lockedCount}
-      </p>
-      <div
-        className="mt-4 overflow-x-auto rounded-lg border bg-card"
-        onMouseEnter={freeze}
-        onMouseLeave={unfreeze}
-        onFocusCapture={freeze}
-        onBlurCapture={e => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) unfreeze();
-        }}
-      >
+      <LockedStrip students={locked} />
+      <div className="mt-3 overflow-x-auto rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/60 hover:bg-muted/60">
@@ -157,9 +137,6 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
               <TableHead>Бланк</TableHead>
               <TableHead className="text-right">Час</TableHead>
               <TableHead>Події</TableHead>
-              <TableHead>
-                <span className="sr-only">Дія</span>
-              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -208,17 +185,6 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {s.status === "locked" && s.attemptId && (
-                      <form action={unlockAttempt}>
-                        <input type="hidden" name="attempt" value={s.attemptId} />
-                        <SubmitButton size="sm" pendingLabel="Розблоковую…" aria-label={`Дозволити продовжити: ${s.name}`}>
-                          <LockOpen aria-hidden />
-                          Дозволити продовжити
-                        </SubmitButton>
-                      </form>
-                    )}
-                  </TableCell>
                 </TableRow>
               );
             })}
@@ -231,5 +197,47 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
         Можливе списування: під час тесту була подія. Таблиця оновлюється кожні 5 секунд.
       </p>
     </div>
+  );
+}
+
+/**
+ * Pinned above the class table while it scrolls: who is locked right now, with the unlock. Always present,
+ * one row tall when empty, so the first lock does not push the table down under the pointer.
+ */
+function LockedStrip({ students }: { students: MonitorRow[] }) {
+  return (
+    <section aria-label="Заблоковані учні" className="sticky top-0 z-10 -mx-1 mt-4 bg-background px-1 py-2">
+      <p className="sr-only" aria-live="polite">
+        {students.length ? `Заблоковано: ${students.map(s => s.name).join(", ")}` : "Заблокованих немає"}
+      </p>
+      {students.length === 0 ? (
+        <p className="box-content flex h-12 items-center gap-2 rounded-lg border border-dashed px-3 text-sm text-muted-foreground">
+          <Lock className="size-4" aria-hidden />
+          Заблокованих немає
+        </p>
+      ) : (
+        <ul className="grid rounded-lg border border-destructive/30 bg-danger-soft">
+          {students.map(s => (
+            <li key={s.n} className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-b border-destructive/15 px-3 py-1.5 last:border-b-0">
+              <Lock className="size-4 shrink-0 text-destructive" aria-hidden />
+              <span className="font-medium">{s.name}</span>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {s.answered.filter(Boolean).length}/{s.answered.length} · {s.time}
+                {s.lastEvent && ` · ${s.lastEvent}`}
+              </span>
+              {s.attemptId && (
+                <ActionForm action={unlockAttempt} className="ml-auto justify-items-end">
+                  <input type="hidden" name="attempt" value={s.attemptId} />
+                  <SubmitButton size="sm" pendingLabel="Розблоковую…" aria-label={`Дозволити продовжити: ${s.name}`}>
+                    <LockOpen aria-hidden />
+                    Дозволити продовжити
+                  </SubmitButton>
+                </ActionForm>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

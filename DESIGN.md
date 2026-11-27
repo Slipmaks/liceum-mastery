@@ -197,7 +197,7 @@ Do:
 - Do keep student targets at 48px or more and the prompt at 18px.
 - Do use `tabular-nums` for every timer, count and number column.
 - Do switch the timer to amber below 5 minutes and red below 1 minute.
-- Do sort the class locked, then flagged, then by name, and give locked rows the inline unlock action.
+- Do keep the class table in class-list order and pin locked students in the strip above it, each with «Дозволити продовжити».
 - Do write all UI text in Ukrainian.
 - (+1 more)
 Map: src/app/globals.css

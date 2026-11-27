@@ -133,6 +133,26 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
     };
   }, [attemptId, preview]);
 
+  // Phones must not lock an honest student: a screen that dims mid-question fires visibilitychange, and
+  // pull-to-refresh reloads the page (a reopen). Keep the screen awake and switch pull-to-refresh off.
+  useEffect(() => {
+    if (preview) return;
+    const roots = [document.documentElement, document.body];
+    roots.forEach(el => (el.style.overscrollBehaviorY = "none"));
+    let wake: WakeLockSentinel | null = null;
+    const keepAwake = () => {
+      if (document.visibilityState === "visible" && "wakeLock" in navigator)
+        navigator.wakeLock.request("screen").then(w => (wake = w), () => {});
+    };
+    keepAwake();
+    document.addEventListener("visibilitychange", keepAwake);
+    return () => {
+      document.removeEventListener("visibilitychange", keepAwake);
+      void wake?.release();
+      roots.forEach(el => (el.style.overscrollBehaviorY = ""));
+    };
+  }, [preview]);
+
   // While locked, wait for the teacher's «Дозволити продовжити» (the monitor polls every 5 s too).
   useEffect(() => {
     if (!locked) return;
@@ -186,8 +206,13 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
     for (const [qid, r] of pending.current) {
       try {
         const s = await saveAnswer(attemptId, qid, r);
-        if (pending.current.get(qid) === r) pending.current.delete(qid);
         apply(s);
+        // Not in progress means the server refused it (locked or finished): keep it queued, it goes after the unlock.
+        if (s.status !== "in_progress") {
+          setUnsaved(true);
+          return;
+        }
+        if (pending.current.get(qid) === r) pending.current.delete(qid);
       } catch {
         setUnsaved(true);
         return;
@@ -196,10 +221,14 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
     setUnsaved(false);
   }, [attemptId, apply, preview]);
   useEffect(() => {
-    if (!unsaved) return;
+    if (!unsaved || locked) return;
     const id = setInterval(flush, 5000);
     return () => clearInterval(id);
-  }, [unsaved, flush]);
+  }, [unsaved, locked, flush]);
+  // The teacher's unlock: send what was queued while locked right away.
+  useEffect(() => {
+    if (!locked && pending.current.size) void flush();
+  }, [locked, flush]);
 
   const question = questions[q];
   const states: CellState[] = questions.map(x => {
@@ -267,7 +296,9 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
         <Timer seconds={left} />
         <p className="text-sm text-muted-foreground">Час тесту не зупиняється.</p>
         <p className="mt-2 max-w-sm rounded-lg border bg-card px-4 py-3 text-sm text-pretty text-foreground">
-          Усі попередні відповіді збережено. Не оновлюйте сторінку — тест відкриється сам після дозволу вчителя.
+          {unsaved
+            ? "Не всі відповіді ще збережено — вони збережуться, щойно вчитель дозволить продовжити. Не оновлюйте сторінку."
+            : "Усі попередні відповіді збережено. Не оновлюйте сторінку — тест відкриється сам після дозволу вчителя."}
         </p>
         <p className="text-xs text-muted-foreground" role={pollOffline ? "status" : undefined}>
           {pollOffline ? "Немає зв’язку — перевірю, щойно мережа відновиться." : "Перевіряємо дозвіл кожні 5 с."}

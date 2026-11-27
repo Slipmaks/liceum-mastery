@@ -1,4 +1,5 @@
 // A test as staff see it: every teacher of the school may read it (PRODUCT.md › Tests). Admins and the author open it to a class.
+import { isId } from "@/lib/utils";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -34,7 +35,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
   const me = await requireStaff();
   const id = Number((await params).id);
   const sp = await searchParams;
-  const [test] = Number.isInteger(id)
+  const [test] = isId(id)
     ? await db
         .select({ id: tests.id, title: tests.title, subject: subjects.name, grade: tests.grade, topic: tests.topic, minutes: tests.timeLimitMin, status: tests.status, authorId: tests.authorId, author: users.name })
         .from(tests)

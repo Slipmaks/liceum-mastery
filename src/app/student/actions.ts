@@ -1,4 +1,5 @@
 "use server";
+import { isId } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import { and, count, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -7,7 +8,6 @@ import { requireStudent } from "@/lib/auth";
 import { attemptState, finalizeDue, recordEvent, submit, visibleTo, type AttemptState } from "@/lib/attempt";
 import { isValidResponse, makeShuffle, scoreAnswer } from "@/lib/questions";
 
-const isId = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
 const FINISHED: AttemptState = { status: "finished", remainingMs: 0 };
 
 /** «Почати»: starts an attempt if one is allowed (attempts < 1 + retake grants), or resumes the unfinished one. */

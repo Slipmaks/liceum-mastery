@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ConfirmForm } from "@/components/confirm-form";
 import { FormError } from "@/components/form-error";
+import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { studentsLabel } from "@/lib/format";
 import { openTest } from "../../actions";
@@ -135,17 +136,17 @@ export function OpenFormClient({ testId, classId, classTitle, roster, empty, isD
   }
 
   return (
-    <form
+    <ActionForm
       action={openTest}
       onSubmit={e => {
         if (!valid()) e.preventDefault();
       }}
-      className="grid gap-3 border-t pt-3"
+      className="justify-items-stretch gap-3 border-t pt-3"
     >
       {fields}
       <SubmitButton className="w-fit" pendingLabel="Відкриваю…">
         {label}
       </SubmitButton>
-    </form>
+    </ActionForm>
   );
 }

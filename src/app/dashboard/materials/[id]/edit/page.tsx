@@ -1,3 +1,4 @@
+import { isId } from "@/lib/utils";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -32,7 +33,7 @@ export default function EditMaterialPage({ params }: PageProps<"/dashboard/mater
 async function Edit({ params }: Pick<PageProps<"/dashboard/materials/[id]/edit">, "params">) {
   const me = await requireStaff();
   const id = Number((await params).id);
-  const [m] = Number.isInteger(id) ? await db.select().from(materials).where(and(eq(materials.id, id), editableMaterials(me))) : [];
+  const [m] = isId(id) ? await db.select().from(materials).where(and(eq(materials.id, id), editableMaterials(me))) : [];
   if (!m) notFound();
   return <MaterialForm values={m} subjects={await schoolSubjects(me.schoolId)} />;
 }

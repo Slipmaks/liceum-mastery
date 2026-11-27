@@ -1,4 +1,5 @@
 // Staff-side access and data for an assignment: PRODUCT.md › People and permissions, Teacher views.
+import { isId } from "@/lib/utils";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -27,7 +28,7 @@ export type Assignment = NonNullable<Awaited<ReturnType<typeof getAssignment>>>;
  * Watching (monitor, unlock, results, retake, comment): those plus the homeroom teacher of the class.
  */
 export async function getAssignment(id: number, me: Staff) {
-  if (!Number.isInteger(id)) return null;
+  if (!isId(id)) return null;
   const [a] = await db
     .select({
       id: assignments.id,
@@ -180,7 +181,7 @@ export const assignableRanks = (me: Staff) => (["deputy", "teacher"] as const).f
 
 /** A class of the caller's school, if they may manage its roster: admins, and its homeroom teacher. */
 export async function getClass(id: number, me: Staff) {
-  if (!Number.isInteger(id)) return null;
+  if (!isId(id)) return null;
   const [c] = await db.select().from(classes).where(and(eq(classes.id, id), eq(classes.schoolId, me.schoolId)));
   return c && (isAdmin(me) || c.homeroomTeacherId === me.id) ? c : null;
 }

@@ -11,6 +11,7 @@ import { getAssignment, loadResults } from "@/lib/staff";
 import { hhmm, mmss, questionsLabel } from "@/lib/format";
 import { SubmitButton } from "@/components/submit-button";
 import { addStudents } from "../../actions";
+import { ActionForm } from "@/components/action-form";
 import { Monitor, type MonitorRow } from "./monitor";
 
 export const metadata: Metadata = { title: "Моніторинг" };
@@ -75,7 +76,7 @@ async function Live({ params }: Pick<PageProps<"/dashboard/assignments/[id]">, "
       {notListed.length > 0 && (
         <details className="max-w-xl rounded-lg border bg-card p-4">
           <summary className="cursor-pointer text-sm font-medium">Додати учнів</summary>
-          <form action={addStudents} className="mt-3 grid gap-3">
+          <ActionForm action={addStudents} className="mt-3 justify-items-stretch gap-3">
             <input type="hidden" name="assignment" value={a.id} />
             <div className="grid gap-1 sm:grid-cols-2">
               {notListed.map(s => (
@@ -88,7 +89,7 @@ async function Live({ params }: Pick<PageProps<"/dashboard/assignments/[id]">, "
             <SubmitButton variant="outline" className="w-fit" pendingLabel="Додаю…">
               Додати
             </SubmitButton>
-          </form>
+          </ActionForm>
         </details>
       )}
     </div>

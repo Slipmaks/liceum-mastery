@@ -12,9 +12,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { FormError } from "@/components/form-error";
+import type { ActionResult } from "@/components/action-form";
 
 type ConfirmFormProps = {
-  action: (fd: FormData) => Promise<void>;
+  action: (fd: FormData) => Promise<ActionResult>;
   message: string;
   title?: string;
   confirmLabel?: string;
@@ -52,7 +53,7 @@ export function ConfirmForm({
     <>
       <form
         ref={formRef}
-        action={action}
+        action={async fd => void (await action(fd))}
         className={className}
         onSubmit={e => {
           e.preventDefault();
@@ -91,8 +92,9 @@ export function ConfirmForm({
                 setError(null);
                 startTransition(async () => {
                   try {
-                    await action(fd);
-                    setOpen(false);
+                    const r = await action(fd);
+                    if (r?.error) setError(r.error);
+                    else setOpen(false);
                   } catch (err) {
                     if (isNextNavigationError(err)) throw err;
                     setError("Не вдалося виконати дію. Перевірте з’єднання та спробуйте ще раз.");

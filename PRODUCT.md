@@ -156,7 +156,7 @@ Without cron, an attempt past its deadline is finalised on the next request that
 ## Teacher views
 
 - **Who sees what.** Admins see every assignment of the school; a teacher sees the assignments of their own tests; a homeroom teacher sees every assignment opened to their class. Only admins and the test's author open and close a test.
-- **Monitor** for an open assignment. It polls every 5 s and shows, per student: status (не почав / пише / заблоковано / здав), answered N of M, event count, the flag, and an unlock button. Closing the test asks for confirmation, because it ends every running attempt.
+- **Monitor** for an open assignment. It polls every 5 s and shows, per student: status (не почав / пише / заблоковано / здав), answered N of M, event count and the flag. Locked students are pinned in a strip above the table with the unlock button, so rows never reorder under the teacher's pointer. Closing the test asks for confirmation, because it ends every running attempt.
 - **Report**: a table of students × questions with points, total, 12-point grade, flag, retake marker, and a bottom row with the % correct for each question (the share of finished students with full points on it). It exports to CSV in UTF-8 with a BOM so Excel shows Cyrillic correctly, with `;` as the separator and decimal commas, as Excel expects in the Ukrainian locale.
 - **Attempt page**: the event log, each answer next to the key, the teacher's comment on the flag, the student's attempts and retake grants.
 

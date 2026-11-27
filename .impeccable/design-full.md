@@ -177,7 +177,7 @@ components:
 
 Every surface speaks the language of the NMT answer sheet (бланк відповідей): printed numbered cells on cool paper, filled in ballpoint ink. This is a sheet you fill in calmly, not a quiz game. Colour is scarce and always means something: ink is the student's mark, and red, amber and green are states, never decoration.
 
-The world has two densities. The student surface is phone-first and roomy: large targets, an 18px prompt, one question at a time, nothing moving. The teacher surface is desktop-first and dense: a hairline-ruled table that reads a whole class at a glance, with rows needing action sorted to the top.
+The world has two densities. The student surface is phone-first and roomy: large targets, an 18px prompt, one question at a time, nothing moving. The teacher surface is desktop-first and dense: a hairline-ruled table that reads a whole class at a glance, with students needing action pinned in a strip above it.
 
 UI text is Ukrainian throughout. Numbers (timer, counts, cell numbers, times) always use tabular numerals.
 
@@ -278,7 +278,7 @@ shadcn radix-vega, about 6px radius. Primary is solid ink; outline is paper with
 Not a badge. A 16px amber warning-triangle icon (`caution-amber-text`, `role="img"`, aria-label and title «Можливе списування») sits before the last event text on one line in the «Події» cell, so flagged rows keep the same height as the rest. A legend line under the table explains the icon.
 
 ### Class table
-shadcn table inside an 8px card: muted header band, hairline row rules, right-aligned tabular numbers. Sort order: locked, then flagged, then name (Ukrainian collation). Locked rows tint `lock-red-soft` with «Дозволити продовжити» inline. Every row keeps one height.
+shadcn table inside an 8px card: muted header band, hairline row rules, right-aligned tabular numbers. Rows keep the class-list order and never move while the teacher reads them. Locked rows tint `lock-red-soft`; the locked students also sit in a sticky strip above the table, each with «Дозволити продовжити», and the strip is one row tall («Заблокованих немає») when empty, so the first lock does not push the table. Every row keeps one height.
 
 ### Navigation
 Teacher sidebar: Lucide icon plus label, 14px; the current section gets a `sidebar-accent` (muted grey) fill and medium weight, not ink.
@@ -290,7 +290,7 @@ Teacher sidebar: Lucide icon plus label, 14px; the current section gets a `sideb
 - **Do** keep student targets at 48px or more and the prompt at 18px.
 - **Do** use `tabular-nums` for every timer, count and number column.
 - **Do** switch the timer to amber below 5 minutes and red below 1 minute.
-- **Do** sort the class locked, then flagged, then by name, and give locked rows the inline unlock action.
+- **Do** keep the class table in class-list order and pin locked students in the strip above it, each with «Дозволити продовжити».
 - **Do** write all UI text in Ukrainian.
 - **Do** define every colour as a token in `globals.css` with a dark-mode value under `prefers-color-scheme`.
 

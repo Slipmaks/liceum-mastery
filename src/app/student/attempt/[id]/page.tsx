@@ -1,3 +1,4 @@
+import { isId } from "@/lib/utils";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -40,7 +41,7 @@ const FINISHED_COPY = {
 async function Attempt({ params }: Pick<PageProps<"/student/attempt/[id]">, "params">) {
   const me = await requireStudent();
   const id = Number((await params).id);
-  if (!Number.isInteger(id)) notFound();
+  if (!isId(id)) notFound();
   const state = await attemptState(id, me.id);
   if (!state) notFound();
 

@@ -100,6 +100,14 @@ export function Builder({ testId, subjects, initial }: { testId: number; subject
     };
   }, [save, meta, qs, runSave]);
 
+  // Leaving through any in-app link (sidebar, breadcrumbs) unmounts the builder: save the last edit on the way out.
+  useEffect(() => {
+    const [v, sv, last] = [version, savedVersion, latest];
+    return () => {
+      if (v.current > sv.current) void saveDraft(testId, last.current);
+    };
+  }, [testId]);
+
   useEffect(() => {
     if (save === "saved") return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
