@@ -1,6 +1,6 @@
 "use client";
 // Monitor table: DESIGN.md › Class table, Cheating flag. Refreshes from the server every 5 s (no WebSockets).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LockOpen, TriangleAlert } from "lucide-react";
@@ -46,32 +46,29 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
   const { assignmentId, rows: students } = props;
   const router = useRouter();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
-  const interactingRef = useRef(false);
-  const pendingRefreshRef = useRef(false);
+  // Data refreshes every 5 s no matter what. While the pointer or focus is in the table, only the row order
+  // (and which rows show) holds still, so an unlock button never slides out from under the cursor.
+  const [frozen, setFrozen] = useState<{ order: number[]; locked: Set<number> } | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      if (interactingRef.current) pendingRefreshRef.current = true;
-      else router.refresh();
-    }, 5000);
+    const id = setInterval(() => router.refresh(), 5000);
     return () => clearInterval(id);
   }, [router]);
-
-  const pauseRefresh = () => {
-    interactingRef.current = true;
-  };
-  const resumeRefresh = () => {
-    interactingRef.current = false;
-    if (pendingRefreshRef.current) {
-      pendingRefreshRef.current = false;
-      router.refresh();
-    }
-  };
 
   const active = FILTERS.find(f => f.id === filter)!;
   // Locked first (they need the teacher now), then flagged, then the class list order.
   const rank = (s: MonitorRow) => (s.status === "locked" ? 0 : s.flagged ? 1 : 2);
-  const rows = students.filter(active.test).toSorted((a, b) => rank(a) - rank(b) || a.n - b.n);
+  const sorted = students.filter(active.test).toSorted((a, b) => rank(a) - rank(b) || a.n - b.n);
+  const rows = frozen
+    ? [
+        ...frozen.order.flatMap(n => students.find(s => s.n === n) ?? []),
+        ...sorted.filter(s => !frozen.order.includes(s.n)),
+      ]
+    : sorted;
+  const newLocks = frozen ? students.filter(s => s.status === "locked" && !frozen.locked.has(s.n)).length : 0;
+  const freeze = () =>
+    setFrozen(f => f ?? { order: rows.map(s => s.n), locked: new Set(students.filter(s => s.status === "locked").map(s => s.n)) });
+  const unfreeze = () => setFrozen(null);
   const total = students[0]?.answered.length ?? 0;
   const writingCount = students.filter(s => s.status === "writing").length;
   const lockedCount = students.filter(s => s.status === "locked").length;
@@ -132,15 +129,23 @@ export function Monitor(props: { assignmentId: number; canClose: boolean; crumb:
             </Button>
           );
         })}
+        {newLocks > 0 && (
+          <p className="ml-auto self-center text-sm font-medium text-destructive tabular-nums">
+            Нові блокування: {newLocks} — піднімуться нагору, коли курсор залишить таблицю
+          </p>
+        )}
       </div>
 
+      <p className="sr-only" aria-live="polite">
+        Заблоковано: {lockedCount}
+      </p>
       <div
         className="mt-4 overflow-x-auto rounded-lg border bg-card"
-        onMouseEnter={pauseRefresh}
-        onMouseLeave={resumeRefresh}
-        onFocusCapture={pauseRefresh}
+        onMouseEnter={freeze}
+        onMouseLeave={unfreeze}
+        onFocusCapture={freeze}
         onBlurCapture={e => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) resumeRefresh();
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) unfreeze();
         }}
       >
         <Table>

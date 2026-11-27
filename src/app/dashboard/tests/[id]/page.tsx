@@ -1,7 +1,6 @@
 // A test as staff see it: every teacher of the school may read it (PRODUCT.md › Tests). Admins and the author open it to a class.
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import Form from "next/form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
@@ -13,12 +12,11 @@ import { answerLines, correctResponse } from "@/lib/questions";
 import { problems, TYPE_LABEL } from "@/lib/draft";
 import { dayTime, questionsLabel } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { SubmitButton } from "@/components/submit-button";
 import { Copy, Eye, Pencil, Trash2 } from "lucide-react";
 import { copyTest, deleteDraft } from "../../actions";
 import { ConfirmForm } from "@/components/confirm-form";
-import { OpenFormClient } from "./open-form";
+import { ClassPicker, OpenFormClient } from "./open-form";
 
 export const metadata: Metadata = { title: "Тест" };
 
@@ -58,6 +56,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
     db.select({ id: classes.id, name: classes.name }).from(classes).where(eq(classes.schoolId, me.schoolId)),
   ]);
   classList.sort((a, b) => collator.compare(a.name, b.name));
+  const picked = classList.find(c => String(c.id) === sp.class);
   const total = qs.reduce((s, q) => s + q.points, 0);
   const todo = problems({ title: test.title, questions: qs });
   const editable = test.status === "draft" && test.authorId === me.id;
@@ -129,25 +128,12 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
         <section className="grid gap-3 rounded-lg border bg-card p-4">
           <h2 className="font-semibold">Відкрити для класу</h2>
           {test.status === "draft" && <p className="text-sm text-muted-foreground">Після першого відкриття тест не можна буде змінити.</p>}
-          <Form action={`/dashboard/tests/${id}`} className="flex flex-wrap items-end gap-2">
-            <label className="grid gap-1.5 text-sm">
-              Клас
-              <Select name="class" defaultValue={String(sp.class ?? "")}>
-                <option value="" disabled>
-                  Оберіть клас
-                </option>
-                {classList.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <Button type="submit" variant="outline">
-              Далі
-            </Button>
-          </Form>
-          {sp.class && <OpenForm testId={id} classId={Number(sp.class)} schoolId={me.schoolId} empty={!!sp.empty} isDraft={test.status === "draft"} />}
+          <ClassPicker key={String(sp.class ?? "")} testId={id} classes={classList} value={String(sp.class ?? "")} />
+          {picked ? (
+            <OpenForm testId={id} classId={picked.id} classTitle={picked.name} schoolId={me.schoolId} empty={!!sp.empty} isDraft={test.status === "draft"} />
+          ) : (
+            sp.class && <p className="text-sm text-muted-foreground">Цього класу вже немає. Оберіть інший.</p>
+          )}
         </section>
       )}
 
@@ -210,7 +196,7 @@ async function Test({ params, searchParams }: PageProps<"/dashboard/tests/[id]">
   );
 }
 
-async function OpenForm({ testId, classId, schoolId, empty, isDraft }: { testId: number; classId: number; schoolId: number; empty: boolean; isDraft: boolean }) {
+async function OpenForm({ testId, classId, classTitle, schoolId, empty, isDraft }: { testId: number; classId: number; classTitle: string; schoolId: number; empty: boolean; isDraft: boolean }) {
   const roster = Number.isInteger(classId)
     ? await db
         .select({ id: students.id, name: students.name })
@@ -220,5 +206,5 @@ async function OpenForm({ testId, classId, schoolId, empty, isDraft }: { testId:
     : [];
   if (roster.length === 0) return <p className="text-sm text-muted-foreground">У цьому класі немає учнів.</p>;
   roster.sort((a, b) => collator.compare(a.name, b.name));
-  return <OpenFormClient key={`${classId}-${empty ? 1 : 0}`} testId={testId} classId={classId} roster={roster} empty={empty} isDraft={isDraft} />;
+  return <OpenFormClient key={`${classId}-${empty ? 1 : 0}`} testId={testId} classId={classId} classTitle={classTitle} roster={roster} empty={empty} isDraft={isDraft} />;
 }

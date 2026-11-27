@@ -2,9 +2,10 @@
 // The test screen: PRODUCT.md › Taking a test, Anti-cheat; visual rules in DESIGN.md.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Clock, LayoutGrid, Lock, Maximize, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FormError } from "@/components/form-error";
 import { SheetStrip, type CellState } from "@/components/sheet-strip";
 import { cn } from "@/lib/utils";
 import type { AnswerResponse, StudentQuestion } from "@/lib/questions";
@@ -53,8 +54,8 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
   const [unsaved, setUnsaved] = useState(false);
   const [fullscreenFailed, setFullscreenFailed] = useState(false);
   const [submitting, startSubmit] = useTransition();
+  const [submitFailed, setSubmitFailed] = useState(false);
   const wantsFullscreen = useSyncExternalStore(onFullscreenChange, needsFullscreen, () => false) && !fullscreenFailed && !preview;
-  const left = useCountdown(initial.remainingMs, () => !preview && router.refresh());
   const pending = useRef(new Map<number, AnswerResponse | null>());
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -75,6 +76,18 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
     },
     [router],
   );
+  // At 00:00 ask the server (it finalises the attempt); a failed ask means we are offline, and the screen says so.
+  const left = useCountdown(initial.remainingMs, () => !preview && pollAttempt(attemptId).then(apply, () => setPollOffline(true)));
+  const submit = () =>
+    startSubmit(async () => {
+      setSubmitFailed(false);
+      try {
+        await submitAttempt(attemptId);
+      } catch (e) {
+        unstable_rethrow(e);
+        setSubmitFailed(true);
+      }
+    });
 
   // First open is free; opening again (reload, another tab) locks. A ref, so React's dev double-effect calls it once.
   const opened = useRef(false);
@@ -310,8 +323,8 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
           </div>
         )}
         {left === 0 && !preview && (
-          <p role="status" className="mt-2 rounded-md bg-muted px-3 py-2 text-sm">
-            Час вийшов — завершуємо тест…
+          <p role="status" className="mt-2 rounded-md bg-muted px-3 py-2 text-sm text-pretty">
+            {pollOffline ? "Час вийшов. Немає зв’язку — тест завершиться, щойно мережа відновиться." : "Час вийшов — завершуємо тест…"}
           </p>
         )}
         {unsaved && (
@@ -417,11 +430,14 @@ export function TestScreen({ attemptId, subject, title, questions, initialAnswer
                       type="button"
                       className={cn("h-12 text-base", EXAM_BTN)}
                       disabled={unsaved || preview || submitting}
-                      onClick={() => startSubmit(() => submitAttempt(attemptId))}
+                      onClick={submit}
                     >
                       {submitting ? "Надсилаю…" : "Завершити тест"}
                     </Button>
                   </div>
+                  <FormError>
+                    {submitFailed && "Тест не надіслано. Відповіді збережено — перевірте зв’язок і натисніть «Завершити тест» ще раз. Сторінку не оновлюйте."}
+                  </FormError>
                 </div>
               ) : (
                 <div className="grid gap-2">
